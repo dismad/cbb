@@ -63,6 +63,42 @@ sudo apt install python3-matplotlib
 - Throughput (requests/sec)
 - Per-method breakdown
 
+
+## Bench scripts
+
+The `bench-*.sh` scripts run a full concurrency sweep (50 / 100 / 150 / 200) for one endpoint, doing both a cold pass and a warm pass, and save JSON results under `results/`.
+
+| Script                     | Endpoint                          | Notes                                      |
+| -------------------------- | --------------------------------- | ------------------------------------------ |
+| `bench-lwd.sh`             | `lwd=http://127.0.0.1:9067`       |                                            |
+| `bench-zainod.sh`          | `zainod=http://127.0.0.1:8137`    |                                            |
+| `bench-zingod.sh`          | `zingod=https://127.0.0.1:8137`   | Extracts TLS cert to `zingod-ca.pem` if needed |
+| `bench-zebrad-native.sh`   | `zebrad=http://127.0.0.1:9069`    |                                            |
+
+Each script:
+- Uses `--steps 50`, `--chunk 100`, `--start-height 2000000`
+- Prints human-readable output, then writes JSON to `results/<name>-<conc>-pass1.json` and `...-pass2-warm.json`
+- Can be edited if your ports or parameters differ
+
+```bash
+# make sure the binary is built
+cargo build --release
+
+# run one indexer (adjust the script if the port differs)
+./bench-lwd.sh
+./bench-zainod.sh
+./bench-zingod.sh
+./bench-zebrad-native.sh
+```
+
+After they finish you can generate the summary and graphs:
+
+```bash
+python3 summarize.py
+python3 graph.py
+python3 cold-warm-bars.py
+```
+
 ## Reading the results
 
 ### Summary table (`summarize.py`)
