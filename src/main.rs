@@ -96,37 +96,30 @@ async fn run_wallet(
     let mut samples = Vec::new();
     let mut height = start_height;
 
-    // warm-up
+    // warm-up (not recorded)
     for _ in 0..warmup {
         let req = BlockRange {
             start: Some(BlockId { height, hash: vec![] }),
-            end: Some(BlockId {
-                height: height + chunk - 1,
-                hash: vec![],
-            }),
+            end: Some(BlockId { height: height + chunk - 1, hash: vec![] }),
         };
         let _ = tokio::time::timeout(timeout, client.get_block_range(req)).await;
         height += chunk;
     }
 
-    // measured phase
     for i in 0..steps {
-        // GetBlockRange
         let req = BlockRange {
             start: Some(BlockId { height, hash: vec![] }),
-            end: Some(BlockId {
-                height: height + chunk - 1,
-                hash: vec![],
-            }),
+            end: Some(BlockId { height: height + chunk - 1, hash: vec![] }),
         };
+
         let start = Instant::now();
         let result = tokio::time::timeout(timeout, client.get_block_range(req)).await;
         let elapsed = start.elapsed().as_secs_f64() * 1000.0;
 
         match result {
-            Ok(Ok(mut stream)) => {
-                // drain the stream so we measure full response time
-                while let Some(_) = stream.get_mut().next().await {}
+            Ok(Ok(resp)) => {
+                let mut stream = resp.into_inner();
+                while let Some(_) = stream.next().await {}
                 samples.push(Sample {
                     method: "GetBlockRange",
                     latency_ms: elapsed,
@@ -148,12 +141,8 @@ async fn run_wallet(
             }),
         }
 
-        // occasional GetTreeState
         if tree_every > 0 && i % tree_every == 0 {
-            let id = BlockId {
-                height,
-                hash: vec![],
-            };
+            let id = BlockId { height, hash: vec![] };
             let start = Instant::now();
             let result = tokio::time::timeout(timeout, client.get_tree_state(id)).await;
             let elapsed = start.elapsed().as_secs_f64() * 1000.0;
@@ -270,11 +259,9 @@ fn print_summary(s: &Summary) {
     println!("  {:<16} {:>8} {:>8} {:>10} {:>10} {:>10} {:>10}",
              "------", "-----", "------", "---", "---", "---", "---");
 
-    // overall
     println!("  {:<16} {:>8} {:>8} {:>9.1}ms {:>9.1}ms {:>9.1}ms {:>9.1}ms",
              "overall", s.total_requests, s.errors, s.p50, s.p95, s.p99, s.max);
 
-    // per method
     for m in &s.methods {
         println!("  {:<16} {:>8} {:>8} {:>9.1}ms {:>9.1}ms {:>9.1}ms {:>9.1}ms",
                  m.method, m.count, m.errors, m.p50, m.p95, m.p99, m.max);
@@ -306,6 +293,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for (name, url) in &args.endpoint {
         eprintln!("Connecting to {} ({})...", name, url);
+
+        // build the endpoint template (TLS config applied per connection below)
         let mut endpoint = Channel::from_shared(url.clone()).unwrap().timeout(timeout);
         if let Some(ca_path) = &args.tls_ca {
             if url.starts_with("https") {
@@ -318,42 +307,49 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 endpoint = endpoint.tls_config(tls).expect("tls config");
             }
         }
-        let channel = match endpoint.connect().await {
-            Ok(c) => c,
+
+        // quick health check
+        match endpoint.connect().await {
+            Ok(ch) => {
+                let mut probe = CompactTxStreamerClient::new(ch);
+                match tokio::time::timeout(timeout, probe.get_lightd_info(ChainSpec {})).await {
+                    Ok(Ok(info)) => {
+                        let i = info.into_inner();
+                        eprintln!("  vendor={} chain={} height={}", i.vendor, i.chain_name, i.block_height);
+                    }
+                    _ => println!("  (GetLightdInfo failed or timed out, continuing anyway)"),
+                }
+            }
             Err(e) => {
                 eprintln!("  failed to connect: {}", e);
                 continue;
             }
-        };
-
-        // quick health check
-        let mut probe = CompactTxStreamerClient::new(channel.clone());
-        match tokio::time::timeout(timeout, probe.get_lightd_info(ChainSpec {})).await {
-            Ok(Ok(info)) => {
-                let i = info.into_inner();
-                eprintln!("  vendor={} chain={} height={}", i.vendor, i.chain_name, i.block_height);
-            }
-            _ => println!("  (GetLightdInfo failed or timed out, continuing anyway)"),
         }
 
-        let client = CompactTxStreamerClient::new(channel);
         let mut tasks = Vec::new();
+        let chunk = args.chunk;
+        let steps = args.steps;
+        let tree_every = args.tree_every;
+        let warmup = args.warmup;
 
         for w in 0..args.concurrency {
-            let c = client.clone();
-            let start = args.start_height + (w as u64 * 10); // slight offset so wallets don't all hit the same range
-            tasks.push(tokio::spawn(run_wallet(
-                c,
-                start,
-                args.chunk,
-                args.steps,
-                args.tree_every,
-                args.warmup,
-                timeout,
-            )));
+            let start = args.start_height + (w as u64 * 10);
+            // clone the configured endpoint so each wallet gets its own connection
+            let ep = endpoint.clone();
+            tasks.push(tokio::spawn(async move {
+                let channel = match ep.connect().await {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("wallet connect failed: {}", e);
+                        return Vec::new();
+                    }
+                };
+                let client = CompactTxStreamerClient::new(channel);
+                run_wallet(client, start, chunk, steps, tree_every, warmup, timeout).await
+            }));
         }
 
-        eprintln!("  running {} wallets × {} steps...", args.concurrency, args.steps);
+        eprintln!("  running {} wallets × {} steps (one connection each)...", args.concurrency, args.steps);
         let wall_start = Instant::now();
         let results = futures::future::join_all(tasks).await;
         let wall_elapsed = wall_start.elapsed();
