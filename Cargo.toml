@@ -1,0 +1,20 @@
+[package]
+name = "cbb"
+version = "0.1.0"
+edition = "2021"
+description = "Compact Block Bench — realistic light-client load testing for Zcash indexers"
+
+[dependencies]
+tonic = { version = "0.12", features = ["tls"] }
+prost = "0.13"
+tokio = { version = "1", features = ["full"] }
+hdrhistogram = "7"
+clap = { version = "4", features = ["derive"] }
+futures = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[build-dependencies]
+tonic-build = "0.12"
+
+

@@ -1,0 +1,49 @@
+[
+  {
+    "name": "lwd",
+    "total_requests": 12000,
+    "errors": 146,
+    "error_rate": 0.012166666666666666,
+    "p50": 2.0,
+    "p95": 28.0,
+    "p99": 129.0,
+    "mean": 7.079973004892856,
+    "max": 219.0,
+    "wall_time_secs": 24.433959617,
+    "throughput_rps": 491.1197443271112,
+    "methods": [
+      {
+        "method": "GetTreeState",
+        "count": 1981,
+        "errors": 19,
+        "p50": 12.0,
+        "p95": 134.0,
+        "p99": 182.0,
+        "max": 219.0
+      },
+      {
+        "method": "GetBlockRange",
+        "count": 9873,
+        "errors": 127,
+        "p50": 2.0,
+        "p95": 7.0,
+        "p99": 29.0,
+        "max": 58.0
+      }
+    ],
+    "error_samples": [
+      [
+        "status: Cancelled, message: \"operation was canceled\", details: [], metadata: MetadataMap { headers: {} }",
+        24
+      ],
+      [
+        "status: InvalidArgument, message: \"GetTreeState: z_gettreestate failed: status code: 429, response: \\\"Too many connections. Please try again later.\\\"\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\"} }",
+        1
+      ],
+      [
+        "status: ResourceExhausted, message: \"h2 protocol error: http2 error\", details: [], metadata: MetadataMap { headers: {} }",
+        121
+      ]
+    ]
+  }
+]

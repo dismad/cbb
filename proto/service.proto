@@ -1,0 +1,58 @@
+syntax = "proto3";
+package cash.z.wallet.sdk.rpc;
+
+// Minimal CompactTxStreamer subset needed for benchmarking.
+// Full definitions live in the zcash lightwallet-protocol repo.
+
+message BlockID {
+  uint64 height = 1;
+  bytes  hash   = 2;
+}
+
+message BlockRange {
+  BlockID start = 1;
+  BlockID end   = 2;
+}
+
+message CompactBlock {
+  uint32 proto_version = 1;
+  uint64 height        = 2;
+  bytes  hash          = 3;
+  bytes  prev_hash     = 4;
+  uint32 time          = 5;
+  bytes  header        = 6;
+  repeated CompactTx vtx = 7;
+}
+
+message CompactTx {
+  uint64 index = 1;
+  bytes  hash  = 2;
+}
+
+message ChainSpec {}
+
+message TreeState {
+  string network = 1;
+  uint64 height  = 2;
+  string hash    = 3;
+  uint32 time    = 4;
+  string sapling_tree = 5;
+  string orchard_tree = 6;
+}
+
+message LightdInfo {
+  string version = 1;
+  string vendor  = 2;
+  bool   taddr_support = 3;
+  string chain_name = 4;
+  uint64 sapling_activation_height = 5;
+  string consensus_branch_id = 6;
+  uint64 block_height = 7;
+}
+
+service CompactTxStreamer {
+  rpc GetLatestBlock(ChainSpec) returns (BlockID) {}
+  rpc GetBlockRange(BlockRange) returns (stream CompactBlock) {}
+  rpc GetTreeState(BlockID) returns (TreeState) {}
+  rpc GetLightdInfo(ChainSpec) returns (LightdInfo) {}
+}
