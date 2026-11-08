@@ -69,7 +69,7 @@ def series(rows, key, method=None):
     return xs, ys
 
 def plot(services, title, ylabel, key, method=None, filename="plot.png", logy=False):
-    plt.figure(figsize=(8, 5))
+    plt.figure(figsize=(10, 5), constrained_layout=True)
     any_data = False
     for i, svc in enumerate(services):
         rows = load_warm(svc)
@@ -94,11 +94,17 @@ def plot(services, title, ylabel, key, method=None, filename="plot.png", logy=Fa
     plt.title(title + (" — log scale" if logy else ""))
     if logy:
         plt.yscale("log")
-    plt.legend()
+    # Legend outside the plot, never overlapping data
+    plt.legend(
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1.0),
+        fontsize=9,
+        framealpha=0.95,
+        borderaxespad=0.0,
+    )
     plt.grid(True, alpha=0.3, which="both" if logy else "major")
-    plt.tight_layout()
     out = os.path.join(OUT_DIR, filename)
-    plt.savefig(out, dpi=120)
+    plt.savefig(out, dpi=120, bbox_inches="tight")
     print(f"saved {out}")
     plt.close()
 

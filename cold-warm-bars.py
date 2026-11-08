@@ -76,7 +76,8 @@ def plot_bars(services, title, ylabel, key, method=None, filename="bars.png", lo
     bar_width = group_width / (n_svc * 2)
     x = np.arange(len(concs))
 
-    plt.figure(figsize=(10, 5.5))
+    # Wider figure so external legend has room
+    plt.figure(figsize=(12, 5.5), constrained_layout=True)
     for i, svc in enumerate(services):
         cold, warm = data[svc]
         color = COLORS.get(svc, f"C{i}")
@@ -98,11 +99,18 @@ def plot_bars(services, title, ylabel, key, method=None, filename="bars.png", lo
     if logy:
         plt.yscale("log")
     plt.xticks(x, concs)
-    plt.legend(fontsize=8, ncol=2, framealpha=0.9)
+    # Legend outside the plot, never overlapping bars
+    plt.legend(
+        loc="upper left",
+        bbox_to_anchor=(1.02, 1.0),
+        fontsize=8,
+        framealpha=0.95,
+        borderaxespad=0.0,
+        ncol=1,
+    )
     plt.grid(True, axis="y", alpha=0.3, which="both" if logy else "major")
-    plt.tight_layout()
     out = os.path.join(OUT_DIR, filename)
-    plt.savefig(out, dpi=130)
+    plt.savefig(out, dpi=130, bbox_inches="tight")
     print(f"saved {out}")
     plt.close()
 
