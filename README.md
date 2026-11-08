@@ -4,7 +4,7 @@ Realistic light-client load testing for Zcash CompactTxStreamer endpoints.
 
 Compares **lightwalletd**, **zainod**, **zingod**, and **zebrad native** under wallet-style traffic.
 
-![Throughput comparison](/community-results/dismad_issue_1_fix/bar_throughput.png)
+![Throughput vs concurrency](/community-results/dismad_issue_1_fix/throughput.png)
 
 ## Dependencies
 
