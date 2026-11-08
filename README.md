@@ -81,6 +81,8 @@ Prints every `results/*.json` sorted by indexer then concurrency, plus a delta t
   - Positive latency Δ% = slower than best
   - Negative rps Δ% = lower throughput than best
 
+![sum](https://github.com/user-attachments/assets/315f84a7-be34-4ee7-87a2-bc1eacff104f)
+
 ### Graphs (`graph.py` / `cold-warm-bars.py`)
 
 ```bash
