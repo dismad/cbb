@@ -1,0 +1,16 @@
+# Reference Results
+
+These are the original runs used for the graphs and summary tables.
+
+## Machine
+- CPU: Intel Core Ultra 9 185H (16 cores / 16 threads, up to 5.1 GHz)
+- RAM: 30 GiB
+- OS: Ubuntu 26.04.1 LTS
+- Kernel: 7.0.0-42-generic
+- Zebra version: 6.1.0
+- Indexer versions:
+  - lightwalletd: v0.6.1 (commit 0bf0a40854de6bd9a50400f94f0f94fbb53ac743, built 2026-11-07 by zktails)
+  - zainod: 0.10.1
+  - zingod: 1.0.0
+- Notes: 
+
