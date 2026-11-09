@@ -1,0 +1,27 @@
+[
+  {
+    "name": "zainod",
+    "total_requests": 10000,
+    "errors": 0,
+    "error_rate": 0.0,
+    "p50": 32.0,
+    "p95": 99.0,
+    "p99": 144.0,
+    "mean": 39.844199999999994,
+    "max": 248.0,
+    "wall_time_secs": 12.818046639,
+    "throughput_rps": 780.150071351289,
+    "methods": [
+      {
+        "method": "GetBlockRange",
+        "count": 10000,
+        "errors": 0,
+        "p50": 32.0,
+        "p95": 99.0,
+        "p99": 144.0,
+        "max": 248.0
+      }
+    ],
+    "error_samples": []
+  }
+]

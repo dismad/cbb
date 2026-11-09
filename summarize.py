@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Pretty-print all cbb JSON results as a table + deltas (colorized)."""
+"""Pretty-print all cbb JSON results as a table + deltas (colorized).
+Handles both "svc-50-pass2-warm.json" and "svc-blockrange-50-pass2-warm.json".
+"""
 
 import json, sys, glob, re
 from pathlib import Path
@@ -26,11 +28,23 @@ def load(path):
     return json.loads(raw[start:])
 
 def parse_name(stem: str):
+    """Return (indexer, concurrency, variant) from either naming style.
+    Examples:
+      lwd-50-pass2-warm              -> ("lwd", 50, "pass2-warm")
+      lwd-blockrange-50-pass2-warm   -> ("lwd", 50, "blockrange-pass2-warm")
+    """
+    # blockrange form
+    m = re.match(r'^([a-zA-Z0-9]+)-blockrange-(\d+)(?:-(.+))?$', stem)
+    if m:
+        indexer = m.group(1)
+        conc = int(m.group(2))
+        variant = f"blockrange-{m.group(3)}" if m.group(3) else "blockrange"
+        return (indexer, conc, variant)
+    # original form
     m = re.match(r'^([a-zA-Z0-9]+)-(\d+)(?:-(.+))?$', stem)
-    if not m:
-        return (stem, 0, "")
-    indexer, conc, variant = m.group(1), int(m.group(2)), m.group(3) or ""
-    return (indexer, conc, variant)
+    if m:
+        return (m.group(1), int(m.group(2)), m.group(3) or "")
+    return (stem, 0, "")
 
 def main():
     if len(sys.argv) > 1:
@@ -74,10 +88,10 @@ def main():
 
     rows.sort(key=lambda r: (r["indexer"], r["conc"], r["variant"]))
 
-    print(colorize(f"{'run':<28} {'conc':>5} {'err%':>6} {'errs':>6} {'p50':>8} {'p95':>8} {'p99':>8} {'rps':>8} {'wall':>7}", BOLD))
-    print("-" * 98)
+    print(colorize(f"{'run':<40} {'conc':>5} {'err%':>6} {'errs':>6} {'p50':>8} {'p95':>8} {'p99':>8} {'rps':>8} {'wall':>7}", BOLD))
+    print("-" * 110)
     for r in rows:
-        print(f"{r['stem']:<28} {r['conc']:>5} {r['error_rate']:>6.1f} {r['errors']:>6} "
+        print(f"{r['stem']:<40} {r['conc']:>5} {r['error_rate']:>6.1f} {r['errors']:>6} "
               f"{r['p50']:>8.1f} {r['p95']:>8.1f} {r['p99']:>8.1f} "
               f"{r['rps']:>8.1f} {r['wall']:>7.1f}")
 
@@ -85,11 +99,11 @@ def main():
     for r in rows:
         groups[(r["conc"], r["variant"])].append(r)
 
-    print("\n" + "=" * 98)
+    print("\n" + "=" * 110)
     print(colorize("Deltas vs best (lower latency / higher rps is better)", BOLD))
-    print("=" * 98)
-    print(colorize(f"{'run':<28} {'conc':>5} {'p50 Δ%':>9} {'p95 Δ%':>9} {'p99 Δ%':>9} {'rps Δ%':>9}", BOLD))
-    print("-" * 98)
+    print("=" * 110)
+    print(colorize(f"{'run':<40} {'conc':>5} {'p50 Δ%':>9} {'p95 Δ%':>9} {'p99 Δ%':>9} {'rps Δ%':>9}", BOLD))
+    print("-" * 110)
 
     for key in sorted(groups.keys(), key=lambda k: (k[0], k[1])):
         group = groups[key]
@@ -126,7 +140,7 @@ def main():
             p99_s = colorize(f"{p99_d:>+8.1f}%", style(p99_d, True))
             rps_s = colorize(f"{rps_d:>+8.1f}%", style(rps_d, False))
 
-            print(f"{r['stem']:<28} {r['conc']:>5} {p50_s} {p95_s} {p99_s} {rps_s}")
+            print(f"{r['stem']:<40} {r['conc']:>5} {p50_s} {p95_s} {p99_s} {rps_s}")
         print()
 
 if __name__ == "__main__":

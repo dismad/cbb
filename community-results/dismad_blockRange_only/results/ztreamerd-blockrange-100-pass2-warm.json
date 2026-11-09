@@ -1,0 +1,27 @@
+[
+  {
+    "name": "ztreamerd",
+    "total_requests": 5000,
+    "errors": 0,
+    "error_rate": 0.0,
+    "p50": 22.0,
+    "p95": 33.0,
+    "p99": 46.0,
+    "mean": 22.113599999999984,
+    "max": 74.0,
+    "wall_time_secs": 1.421342036,
+    "throughput_rps": 3517.8021006619974,
+    "methods": [
+      {
+        "method": "GetBlockRange",
+        "count": 5000,
+        "errors": 0,
+        "p50": 22.0,
+        "p95": 33.0,
+        "p99": 46.0,
+        "max": 74.0
+      }
+    ],
+    "error_samples": []
+  }
+]

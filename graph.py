@@ -1,35 +1,85 @@
 #!/usr/bin/env python3
 """Graph cbb JSON results (pass2-warm preferred). Auto-detects services.
 Generates both linear and log-scale versions of each plot.
+Handles both "svc-50-pass2-warm.json" and "svc-blockrange-50-pass2-warm.json".
 """
 
 import json
 import glob
 import os
+import re
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.colors import to_hex
 
 RESULTS_DIR = "results"
 OUT_DIR = "graphs"
 os.makedirs(OUT_DIR, exist_ok=True)
 
-# Fixed distinct colors so the same service always looks the same
-COLORS = {
-    "lwd":     "#1f77b4",
-    "zainod":  "#ff7f0e",
-    "zingod":  "#2ca02c",
-    "native":  "#d62728",
-    "zebrad":  "#9467bd",
-    "zinder":  "#8c564b",
-    "lwd-rs":  "#e377c2",
-    "ztreamer":"#7f7f7f",
+PREFERRED = {
+    "lwd":      "#1f77b4",
+    "zainod":   "#ff7f0e",
+    "zingod":   "#2ca02c",
+    "native":   "#d62728",
+    "zebrad":   "#9467bd",
+    "zinder":   "#8c564b",
+    "lwd-rs":   "#e377c2",
+    "ztreamerd":"#7f7f7f",
+    "ztreamer": "#7f7f7f",
 }
+
+def distinct_colors(n):
+    if n <= 10:
+        cmap = plt.cm.tab10
+    elif n <= 20:
+        cmap = plt.cm.tab20
+    else:
+        cmap = plt.cm.gist_ncar
+    return [to_hex(cmap(i / max(n - 1, 1))) for i in range(n)]
+
+def assign_colors(services):
+    colors = {}
+    used = set()
+    for svc in services:
+        if svc in PREFERRED and PREFERRED[svc] not in used:
+            colors[svc] = PREFERRED[svc]
+            used.add(PREFERRED[svc])
+    remaining = [s for s in services if s not in colors]
+    if remaining:
+        pool = distinct_colors(len(services) + len(remaining))
+        idx = 0
+        for svc in remaining:
+            while idx < len(pool) and pool[idx] in used:
+                idx += 1
+            colors[svc] = pool[idx] if idx < len(pool) else f"C{len(colors)}"
+            used.add(colors[svc])
+            idx += 1
+    return colors
+
+def parse_filename(basename):
+    """Return (service, concurrency) from either naming style.
+    Examples:
+      lwd-50-pass2-warm.json              -> ("lwd", 50)
+      lwd-blockrange-50-pass2-warm.json   -> ("lwd", 50)
+    """
+    stem = os.path.splitext(basename)[0]
+    # Try the blockrange form first
+    m = re.match(r'^([a-zA-Z0-9]+)-blockrange-(\d+)-', stem)
+    if m:
+        return m.group(1), int(m.group(2))
+    # Fall back to original form
+    m = re.match(r'^([a-zA-Z0-9]+)-(\d+)-', stem)
+    if m:
+        return m.group(1), int(m.group(2))
+    return None, None
 
 def detect_services():
     found = set()
     for path in glob.glob(os.path.join(RESULTS_DIR, "*-pass2-warm.json")):
-        found.add(os.path.basename(path).split("-")[0])
+        svc, _ = parse_filename(os.path.basename(path))
+        if svc:
+            found.add(svc)
     return sorted(found) or ["lwd", "zainod"]
 
 def load_warm(service):
@@ -47,12 +97,14 @@ def load_warm(service):
             data = json.loads(raw[start:])
             if not data:
                 continue
-            conc = int(os.path.basename(path).split("-")[1])
+            svc, conc = parse_filename(os.path.basename(path))
+            if svc != service or conc is None:
+                continue
             rows.append((conc, data[0]))
         except (json.JSONDecodeError, ValueError, IndexError) as e:
             print(f"skip bad file {path}: {e}")
             continue
-    return sorted(rows)
+    return sorted(rows, key=lambda x: x[0])
 
 def series(rows, key, method=None):
     xs, ys = [], []
@@ -68,10 +120,10 @@ def series(rows, key, method=None):
         ys.append(val)
     return xs, ys
 
-def plot(services, title, ylabel, key, method=None, filename="plot.png", logy=False):
+def plot(services, colors, title, ylabel, key, method=None, filename="plot.png", logy=False):
     plt.figure(figsize=(10, 5), constrained_layout=True)
     any_data = False
-    for i, svc in enumerate(services):
+    for svc in services:
         rows = load_warm(svc)
         if not rows:
             print(f"no data for {svc}")
@@ -80,8 +132,7 @@ def plot(services, title, ylabel, key, method=None, filename="plot.png", logy=Fa
         if not xs:
             continue
         any_data = True
-        color = COLORS.get(svc, f"C{i}")
-        # For log scale, replace zeros with a tiny value so the point still appears
+        color = colors.get(svc, "#333333")
         if logy:
             ys = [max(v, 1e-4) if v == 0 else v for v in ys]
         plt.plot(xs, ys, marker="o", label=svc, color=color, linewidth=1.8, markersize=6)
@@ -94,7 +145,6 @@ def plot(services, title, ylabel, key, method=None, filename="plot.png", logy=Fa
     plt.title(title + (" — log scale" if logy else ""))
     if logy:
         plt.yscale("log")
-    # Legend outside the plot, never overlapping data
     plt.legend(
         loc="upper left",
         bbox_to_anchor=(1.02, 1.0),
@@ -110,7 +160,9 @@ def plot(services, title, ylabel, key, method=None, filename="plot.png", logy=Fa
 
 def main():
     services = detect_services()
+    colors = assign_colors(services)
     print(f"services: {services}")
+    print(f"colors: {colors}")
 
     specs = [
         ("Error rate vs concurrency", "error rate", "error_rate", None, "error_rate"),
@@ -124,10 +176,8 @@ def main():
     ]
 
     for title, ylabel, key, method, base in specs:
-        # Linear
-        plot(services, title, ylabel, key, method, filename=f"{base}.png", logy=False)
-        # Log (skip pure error-rate if you prefer, but generate both for consistency)
-        plot(services, title, ylabel, key, method, filename=f"{base}_log.png", logy=True)
+        plot(services, colors, title, ylabel, key, method, filename=f"{base}.png", logy=False)
+        plot(services, colors, title, ylabel, key, method, filename=f"{base}_log.png", logy=True)
 
     print(f"\nGraphs written to {OUT_DIR}/ (linear + _log versions)")
 

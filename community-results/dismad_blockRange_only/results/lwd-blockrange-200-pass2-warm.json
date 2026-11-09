@@ -1,0 +1,27 @@
+[
+  {
+    "name": "lwd",
+    "total_requests": 10000,
+    "errors": 0,
+    "error_rate": 0.0,
+    "p50": 8.0,
+    "p95": 366.0,
+    "p99": 525.0,
+    "mean": 57.825399999999966,
+    "max": 1391.0,
+    "wall_time_secs": 19.926921157,
+    "throughput_rps": 501.83367120349976,
+    "methods": [
+      {
+        "method": "GetBlockRange",
+        "count": 10000,
+        "errors": 0,
+        "p50": 8.0,
+        "p95": 366.0,
+        "p99": 525.0,
+        "max": 1391.0
+      }
+    ],
+    "error_samples": []
+  }
+]
