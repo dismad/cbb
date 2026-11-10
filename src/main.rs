@@ -362,7 +362,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let mut summary = summarize(name, &samples);
         let wall_secs = wall_elapsed.as_secs_f64();
-        let rps = if wall_secs > 0.0 { samples.len() as f64 / wall_secs } else { 0.0 };
+        let completed = samples.iter().filter(|s| s.ok).count();
+        let rps = if wall_secs > 0.0 { completed as f64 / wall_secs } else { 0.0 };
         summary.wall_time_secs = wall_secs;
         summary.throughput_rps = rps;
         if !args.json {
