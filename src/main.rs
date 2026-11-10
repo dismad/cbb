@@ -1,6 +1,8 @@
 use clap::Parser;
 use hdrhistogram::Histogram;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::Barrier;
 use tonic::transport::Channel;
 
 pub mod cash {
@@ -119,17 +121,10 @@ async fn run_wallet(
     chunk: u64,
     steps: u64,
     tree_every: u64,
-    warmup: u64,
     timeout: Duration,
 ) -> Vec<Sample> {
     let mut samples = Vec::new();
     let mut height = start_height;
-
-    // warm-up (not recorded)
-    for _ in 0..warmup {
-        let _ = fetch_range(&mut client, height, chunk, timeout).await;
-        height += chunk;
-    }
 
     for i in 0..steps {
         let start = Instant::now();
@@ -331,25 +326,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let steps = args.steps;
         let tree_every = args.tree_every;
         let warmup = args.warmup;
+        // the clock starts once every wallet (and this task) has connected and warmed up
+        let start_line = Arc::new(Barrier::new(args.concurrency + 1));
 
         for w in 0..args.concurrency {
             let start = args.start_height + (w as u64 * 10);
             // clone the configured endpoint so each wallet gets its own connection
             let ep = endpoint.clone();
+            let start_line = Arc::clone(&start_line);
             tasks.push(tokio::spawn(async move {
                 let channel = match ep.connect().await {
                     Ok(c) => c,
                     Err(e) => {
                         eprintln!("wallet connect failed: {}", e);
+                        start_line.wait().await;
                         return Vec::new();
                     }
                 };
-                let client = CompactTxStreamerClient::new(channel);
-                run_wallet(client, start, chunk, steps, tree_every, warmup, timeout).await
+                let mut client = CompactTxStreamerClient::new(channel);
+                // warm-up (not recorded)
+                for i in 0..warmup {
+                    let _ = fetch_range(&mut client, start + i * chunk, chunk, timeout).await;
+                }
+                start_line.wait().await;
+                run_wallet(client, start + warmup * chunk, chunk, steps, tree_every, timeout).await
             }));
         }
 
         eprintln!("  running {} wallets × {} steps (one connection each)...", args.concurrency, args.steps);
+        start_line.wait().await;
         let wall_start = Instant::now();
         let results = futures::future::join_all(tasks).await;
         let wall_elapsed = wall_start.elapsed();
