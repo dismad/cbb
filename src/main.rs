@@ -1,5 +1,4 @@
 use clap::Parser;
-use futures::StreamExt;
 use hdrhistogram::Histogram;
 use std::time::{Duration, Instant};
 use tonic::transport::Channel;
@@ -47,7 +46,7 @@ struct Args {
     #[arg(long, default_value_t = 5)]
     tree_every: u64,
 
-    /// Request timeout in seconds
+    /// Request timeout in seconds, covering the whole block stream
     #[arg(long, default_value_t = 30)]
     timeout: u64,
 
@@ -84,6 +83,36 @@ struct Sample {
     error: Option<String>,
 }
 
+/// One GetBlockRange, read to its last block. Fails on an error status, a missing or
+/// out-of-order block, or the timeout.
+async fn fetch_range(
+    client: &mut CompactTxStreamerClient<Channel>,
+    height: u64,
+    chunk: u64,
+    timeout: Duration,
+) -> Result<(), String> {
+    let end = height + chunk - 1;
+    let req = BlockRange {
+        start: Some(BlockId { height, hash: vec![] }),
+        end: Some(BlockId { height: end, hash: vec![] }),
+    };
+    let drain = async {
+        let mut stream = client.get_block_range(req).await.map_err(|s| s.to_string())?.into_inner();
+        let mut next = height;
+        while let Some(block) = stream.message().await.map_err(|s| s.to_string())? {
+            if block.height != next {
+                return Err("block out of order".to_string());
+            }
+            next += 1;
+        }
+        if next != end + 1 {
+            return Err("stream ended before the range did".to_string());
+        }
+        Ok(())
+    };
+    tokio::time::timeout(timeout, drain).await.unwrap_or_else(|_| Err("timeout".to_string()))
+}
+
 async fn run_wallet(
     mut client: CompactTxStreamerClient<Channel>,
     start_height: u64,
@@ -98,48 +127,19 @@ async fn run_wallet(
 
     // warm-up (not recorded)
     for _ in 0..warmup {
-        let req = BlockRange {
-            start: Some(BlockId { height, hash: vec![] }),
-            end: Some(BlockId { height: height + chunk - 1, hash: vec![] }),
-        };
-        let _ = tokio::time::timeout(timeout, client.get_block_range(req)).await;
+        let _ = fetch_range(&mut client, height, chunk, timeout).await;
         height += chunk;
     }
 
     for i in 0..steps {
-        let req = BlockRange {
-            start: Some(BlockId { height, hash: vec![] }),
-            end: Some(BlockId { height: height + chunk - 1, hash: vec![] }),
-        };
-
         let start = Instant::now();
-        let result = tokio::time::timeout(timeout, client.get_block_range(req)).await;
-        let elapsed = start.elapsed().as_secs_f64() * 1000.0;
-
-        match result {
-            Ok(Ok(resp)) => {
-                let mut stream = resp.into_inner();
-                while let Some(_) = stream.next().await {}
-                samples.push(Sample {
-                    method: "GetBlockRange",
-                    latency_ms: elapsed,
-                    ok: true,
-                    error: None,
-                });
-            }
-            Ok(Err(status)) => samples.push(Sample {
-                method: "GetBlockRange",
-                latency_ms: elapsed,
-                ok: false,
-                error: Some(status.to_string()),
-            }),
-            Err(_) => samples.push(Sample {
-                method: "GetBlockRange",
-                latency_ms: elapsed,
-                ok: false,
-                error: Some("timeout".into()),
-            }),
-        }
+        let result = fetch_range(&mut client, height, chunk, timeout).await;
+        samples.push(Sample {
+            method: "GetBlockRange",
+            latency_ms: start.elapsed().as_secs_f64() * 1000.0,
+            ok: result.is_ok(),
+            error: result.err(),
+        });
 
         if tree_every > 0 && i % tree_every == 0 {
             let id = BlockId { height, hash: vec![] };
