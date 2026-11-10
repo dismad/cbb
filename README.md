@@ -86,7 +86,7 @@ The `bench-*.sh` scripts run a full concurrency sweep (50 / 100 / 150 / 200) for
 | ------------------------ | ------------------------------- | ---------------------------------------------- |
 | `bench-lwd.sh`           | `lwd=http://127.0.0.1:9067`     |                                                |
 | `bench-zainod.sh`        | `zainod=http://127.0.0.1:8137`  |                                                |
-| `bench-zingod.sh`        | `zingod=https://127.0.0.1:8137` | Extracts TLS cert to `zingod-ca.pem` if needed |
+| `bench-zingod.sh`        | `zingod=http://127.0.0.1:8137`  | Needs `[grpc] max_connections_per_ip = 256`    |
 | `bench-zebrad-native.sh` | `zebrad=http://127.0.0.1:9069`  |                                                |
 | `bench-ztreamerd.sh`     | `ztreamerd=http://127.0.0.1:9067` |                                              |
 
