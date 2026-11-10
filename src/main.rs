@@ -160,7 +160,7 @@ async fn run_wallet(
 }
 
 fn summarize(name: &str, samples: &[Sample]) -> Summary {
-    let mut hist = Histogram::<u64>::new_with_bounds(1, 60_000, 3).unwrap();
+    let mut hist = Histogram::<u64>::new_with_bounds(1, 60_000_000, 3).unwrap();
     let mut errors = 0u64;
     let mut error_msgs: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
     let mut by_method: std::collections::HashMap<&str, Vec<f64>> = std::collections::HashMap::new();
@@ -168,7 +168,7 @@ fn summarize(name: &str, samples: &[Sample]) -> Summary {
 
     for s in samples {
         if s.ok {
-            let _ = hist.record(s.latency_ms as u64);
+            let _ = hist.record((s.latency_ms * 1000.0) as u64);
             by_method.entry(s.method).or_default().push(s.latency_ms);
         } else {
             errors += 1;
@@ -185,28 +185,28 @@ fn summarize(name: &str, samples: &[Sample]) -> Summary {
         total_requests: total,
         errors,
         error_rate: if total == 0 { 0.0 } else { errors as f64 / total as f64 },
-        p50: hist.value_at_quantile(0.50) as f64,
-        p95: hist.value_at_quantile(0.95) as f64,
-        p99: hist.value_at_quantile(0.99) as f64,
-        mean: hist.mean(),
-        max: hist.max() as f64,
+        p50: hist.value_at_quantile(0.50) as f64 / 1000.0,
+        p95: hist.value_at_quantile(0.95) as f64 / 1000.0,
+        p99: hist.value_at_quantile(0.99) as f64 / 1000.0,
+        mean: hist.mean() / 1000.0,
+        max: hist.max() as f64 / 1000.0,
         wall_time_secs: 0.0,
         throughput_rps: 0.0,
         methods: by_method
             .into_iter()
             .map(|(m, v)| {
-                let mut h = Histogram::<u64>::new_with_bounds(1, 60_000, 3).unwrap();
+                let mut h = Histogram::<u64>::new_with_bounds(1, 60_000_000, 3).unwrap();
                 for x in &v {
-                    let _ = h.record(*x as u64);
+                    let _ = h.record((*x * 1000.0) as u64);
                 }
                 MethodSummary {
                     method: m.to_string(),
                     count: v.len() as u64,
                     errors: *method_errors.get(m).unwrap_or(&0),
-                    p50: h.value_at_quantile(0.50) as f64,
-                    p95: h.value_at_quantile(0.95) as f64,
-                    p99: h.value_at_quantile(0.99) as f64,
-                    max: h.max() as f64,
+                    p50: h.value_at_quantile(0.50) as f64 / 1000.0,
+                    p95: h.value_at_quantile(0.95) as f64 / 1000.0,
+                    p99: h.value_at_quantile(0.99) as f64 / 1000.0,
+                    max: h.max() as f64 / 1000.0,
                 }
             })
             .collect(),
