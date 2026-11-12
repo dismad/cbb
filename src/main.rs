@@ -1,7 +1,8 @@
 use clap::Parser;
-use futures::StreamExt;
 use hdrhistogram::Histogram;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+use tokio::sync::Barrier;
 use tonic::transport::Channel;
 
 pub mod cash {
@@ -47,7 +48,7 @@ struct Args {
     #[arg(long, default_value_t = 5)]
     tree_every: u64,
 
-    /// Request timeout in seconds
+    /// Request timeout in seconds, covering the whole block stream
     #[arg(long, default_value_t = 30)]
     timeout: u64,
 
@@ -84,62 +85,56 @@ struct Sample {
     error: Option<String>,
 }
 
+/// One GetBlockRange, read to its last block. Fails on an error status, a missing or
+/// out-of-order block, or the timeout.
+async fn fetch_range(
+    client: &mut CompactTxStreamerClient<Channel>,
+    height: u64,
+    chunk: u64,
+    timeout: Duration,
+) -> Result<(), String> {
+    let end = height + chunk - 1;
+    let req = BlockRange {
+        start: Some(BlockId { height, hash: vec![] }),
+        end: Some(BlockId { height: end, hash: vec![] }),
+    };
+    let drain = async {
+        let mut stream = client.get_block_range(req).await.map_err(|s| s.to_string())?.into_inner();
+        let mut next = height;
+        while let Some(block) = stream.message().await.map_err(|s| s.to_string())? {
+            if block.height != next {
+                return Err("block out of order".to_string());
+            }
+            next += 1;
+        }
+        if next != end + 1 {
+            return Err("stream ended before the range did".to_string());
+        }
+        Ok(())
+    };
+    tokio::time::timeout(timeout, drain).await.unwrap_or_else(|_| Err("timeout".to_string()))
+}
+
 async fn run_wallet(
     mut client: CompactTxStreamerClient<Channel>,
     start_height: u64,
     chunk: u64,
     steps: u64,
     tree_every: u64,
-    warmup: u64,
     timeout: Duration,
 ) -> Vec<Sample> {
     let mut samples = Vec::new();
     let mut height = start_height;
 
-    // warm-up (not recorded)
-    for _ in 0..warmup {
-        let req = BlockRange {
-            start: Some(BlockId { height, hash: vec![] }),
-            end: Some(BlockId { height: height + chunk - 1, hash: vec![] }),
-        };
-        let _ = tokio::time::timeout(timeout, client.get_block_range(req)).await;
-        height += chunk;
-    }
-
     for i in 0..steps {
-        let req = BlockRange {
-            start: Some(BlockId { height, hash: vec![] }),
-            end: Some(BlockId { height: height + chunk - 1, hash: vec![] }),
-        };
-
         let start = Instant::now();
-        let result = tokio::time::timeout(timeout, client.get_block_range(req)).await;
-        let elapsed = start.elapsed().as_secs_f64() * 1000.0;
-
-        match result {
-            Ok(Ok(resp)) => {
-                let mut stream = resp.into_inner();
-                while let Some(_) = stream.next().await {}
-                samples.push(Sample {
-                    method: "GetBlockRange",
-                    latency_ms: elapsed,
-                    ok: true,
-                    error: None,
-                });
-            }
-            Ok(Err(status)) => samples.push(Sample {
-                method: "GetBlockRange",
-                latency_ms: elapsed,
-                ok: false,
-                error: Some(status.to_string()),
-            }),
-            Err(_) => samples.push(Sample {
-                method: "GetBlockRange",
-                latency_ms: elapsed,
-                ok: false,
-                error: Some("timeout".into()),
-            }),
-        }
+        let result = fetch_range(&mut client, height, chunk, timeout).await;
+        samples.push(Sample {
+            method: "GetBlockRange",
+            latency_ms: start.elapsed().as_secs_f64() * 1000.0,
+            ok: result.is_ok(),
+            error: result.err(),
+        });
 
         if tree_every > 0 && i % tree_every == 0 {
             let id = BlockId { height, hash: vec![] };
@@ -165,7 +160,7 @@ async fn run_wallet(
 }
 
 fn summarize(name: &str, samples: &[Sample]) -> Summary {
-    let mut hist = Histogram::<u64>::new_with_bounds(1, 60_000, 3).unwrap();
+    let mut hist = Histogram::<u64>::new_with_bounds(1, 60_000_000, 3).unwrap();
     let mut errors = 0u64;
     let mut error_msgs: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
     let mut by_method: std::collections::HashMap<&str, Vec<f64>> = std::collections::HashMap::new();
@@ -173,7 +168,7 @@ fn summarize(name: &str, samples: &[Sample]) -> Summary {
 
     for s in samples {
         if s.ok {
-            let _ = hist.record(s.latency_ms as u64);
+            let _ = hist.record((s.latency_ms * 1000.0) as u64);
             by_method.entry(s.method).or_default().push(s.latency_ms);
         } else {
             errors += 1;
@@ -190,28 +185,28 @@ fn summarize(name: &str, samples: &[Sample]) -> Summary {
         total_requests: total,
         errors,
         error_rate: if total == 0 { 0.0 } else { errors as f64 / total as f64 },
-        p50: hist.value_at_quantile(0.50) as f64,
-        p95: hist.value_at_quantile(0.95) as f64,
-        p99: hist.value_at_quantile(0.99) as f64,
-        mean: hist.mean(),
-        max: hist.max() as f64,
+        p50: hist.value_at_quantile(0.50) as f64 / 1000.0,
+        p95: hist.value_at_quantile(0.95) as f64 / 1000.0,
+        p99: hist.value_at_quantile(0.99) as f64 / 1000.0,
+        mean: hist.mean() / 1000.0,
+        max: hist.max() as f64 / 1000.0,
         wall_time_secs: 0.0,
         throughput_rps: 0.0,
         methods: by_method
             .into_iter()
             .map(|(m, v)| {
-                let mut h = Histogram::<u64>::new_with_bounds(1, 60_000, 3).unwrap();
+                let mut h = Histogram::<u64>::new_with_bounds(1, 60_000_000, 3).unwrap();
                 for x in &v {
-                    let _ = h.record(*x as u64);
+                    let _ = h.record((*x * 1000.0) as u64);
                 }
                 MethodSummary {
                     method: m.to_string(),
                     count: v.len() as u64,
                     errors: *method_errors.get(m).unwrap_or(&0),
-                    p50: h.value_at_quantile(0.50) as f64,
-                    p95: h.value_at_quantile(0.95) as f64,
-                    p99: h.value_at_quantile(0.99) as f64,
-                    max: h.max() as f64,
+                    p50: h.value_at_quantile(0.50) as f64 / 1000.0,
+                    p95: h.value_at_quantile(0.95) as f64 / 1000.0,
+                    p99: h.value_at_quantile(0.99) as f64 / 1000.0,
+                    max: h.max() as f64 / 1000.0,
                 }
             })
             .collect(),
@@ -331,25 +326,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let steps = args.steps;
         let tree_every = args.tree_every;
         let warmup = args.warmup;
+        // the clock starts once every wallet (and this task) has connected and warmed up
+        let start_line = Arc::new(Barrier::new(args.concurrency + 1));
 
         for w in 0..args.concurrency {
             let start = args.start_height + (w as u64 * 10);
             // clone the configured endpoint so each wallet gets its own connection
             let ep = endpoint.clone();
+            let start_line = Arc::clone(&start_line);
             tasks.push(tokio::spawn(async move {
                 let channel = match ep.connect().await {
                     Ok(c) => c,
                     Err(e) => {
                         eprintln!("wallet connect failed: {}", e);
+                        start_line.wait().await;
                         return Vec::new();
                     }
                 };
-                let client = CompactTxStreamerClient::new(channel);
-                run_wallet(client, start, chunk, steps, tree_every, warmup, timeout).await
+                let mut client = CompactTxStreamerClient::new(channel);
+                // warm-up (not recorded)
+                for i in 0..warmup {
+                    let _ = fetch_range(&mut client, start + i * chunk, chunk, timeout).await;
+                }
+                start_line.wait().await;
+                run_wallet(client, start + warmup * chunk, chunk, steps, tree_every, timeout).await
             }));
         }
 
         eprintln!("  running {} wallets × {} steps (one connection each)...", args.concurrency, args.steps);
+        start_line.wait().await;
         let wall_start = Instant::now();
         let results = futures::future::join_all(tasks).await;
         let wall_elapsed = wall_start.elapsed();
@@ -357,7 +362,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let mut summary = summarize(name, &samples);
         let wall_secs = wall_elapsed.as_secs_f64();
-        let rps = if wall_secs > 0.0 { samples.len() as f64 / wall_secs } else { 0.0 };
+        let completed = samples.iter().filter(|s| s.ok).count();
+        let rps = if wall_secs > 0.0 { completed as f64 / wall_secs } else { 0.0 };
         summary.wall_time_secs = wall_secs;
         summary.throughput_rps = rps;
         if !args.json {
