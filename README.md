@@ -2,7 +2,7 @@
 
 Realistic light-client load testing for Zcash CompactTxStreamer endpoints.
 
-Compares **lightwalletd**, **zainod**, **zingod**, **zebrad native**, and **ztreamerd** under wallet-style traffic.
+Compares **lightwalletd**, **zainod**, **zingod**, **zebrad native**, **ztreamerd**, and **zinder** under wallet-style traffic.
 
 
 
@@ -24,7 +24,7 @@ For a pure block-serving comparison use `--blockrange`; for tree-state cost look
 
 ### Rust (the bench itself)
 - Rust 1.70+ (stable)
-- A running CompactTxStreamer endpoint (lightwalletd, zainod, zingod, zebrad with `lightwalletd_listen_addr`, or ztreamerd)
+- A running CompactTxStreamer endpoint (lightwalletd, zainod, zingod, zebrad with `lightwalletd_listen_addr`, ztreamerd, or zinder's `zinder-compat-lightwalletd`)
 
 ```bash
 cargo build --release
@@ -46,6 +46,7 @@ sudo apt install python3-matplotlib
   --endpoint zingod=http://127.0.0.1:9068 \
   --endpoint native=http://127.0.0.1:8237 \
   --endpoint ztreamerd=http://127.0.0.1:9067 \
+  --endpoint zinder=http://127.0.0.1:9067 \
   --concurrency 50 \
   --chunk 100 \
   --steps 20 \
@@ -89,6 +90,7 @@ The `bench-*.sh` scripts run a full concurrency sweep (50 / 100 / 150 / 200) for
 | `bench-zingod.sh`        | `zingod=http://127.0.0.1:8137`  | Needs `[grpc] max_connections_per_ip = 256`    |
 | `bench-zebrad-native.sh` | `zebrad=http://127.0.0.1:9069`  |                                                |
 | `bench-ztreamerd.sh`     | `ztreamerd=http://127.0.0.1:9067` |                                              |
+| `bench-zinder.sh`        | `zinder=http://127.0.0.1:9067`  | Targets `zinder-compat-lightwalletd`; record its `[compat] serving` mode |
 
 Each script accepts an optional mode flag:
 
@@ -113,6 +115,7 @@ cargo build --release
 ./bench-zingod.sh
 ./bench-zebrad-native.sh
 ./bench-ztreamerd.sh
+./bench-zinder.sh
 
 # GetBlockRange only
 ./bench-ztreamerd.sh --blockrange
