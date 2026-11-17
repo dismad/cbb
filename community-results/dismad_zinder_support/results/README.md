@@ -12,5 +12,6 @@ These are the original runs used for the graphs and summary tables.
   - lightwalletd: v0.6.1 (commit 0bf0a40854de6bd9a50400f94f0f94fbb53ac743, built 2026-11-07 by zktails)
   - zainod: 0.10.1
   - zingod: 1.0.0
+  - zinder 0.16.1
 - Notes: 
 
