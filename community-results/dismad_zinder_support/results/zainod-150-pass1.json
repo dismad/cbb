@@ -1,0 +1,36 @@
+[
+  {
+    "name": "zainod",
+    "total_requests": 9000,
+    "errors": 0,
+    "error_rate": 0.0,
+    "p50": 9.0,
+    "p95": 36.0,
+    "p99": 76.0,
+    "mean": 14.112222222222218,
+    "max": 279.0,
+    "wall_time_secs": 23.237358754,
+    "throughput_rps": 387.30735688498896,
+    "methods": [
+      {
+        "method": "GetBlockRange",
+        "count": 7500,
+        "errors": 0,
+        "p50": 8.0,
+        "p95": 21.0,
+        "p99": 66.0,
+        "max": 279.0
+      },
+      {
+        "method": "GetTreeState",
+        "count": 1500,
+        "errors": 0,
+        "p50": 28.0,
+        "p95": 76.0,
+        "p99": 131.0,
+        "max": 226.0
+      }
+    ],
+    "error_samples": []
+  }
+]

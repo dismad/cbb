@@ -1,0 +1,40 @@
+[
+  {
+    "name": "zinder",
+    "total_requests": 3000,
+    "errors": 500,
+    "error_rate": 0.16666666666666666,
+    "p50": 40.895,
+    "p95": 72.575,
+    "p99": 92.607,
+    "mean": 42.57115839999996,
+    "max": 122.367,
+    "wall_time_secs": 2.272285475,
+    "throughput_rps": 1100.2138716747288,
+    "methods": [
+      {
+        "method": "GetBlockRange",
+        "count": 2500,
+        "errors": 0,
+        "p50": 40.895,
+        "p95": 72.575,
+        "p99": 92.607,
+        "max": 122.367
+      }
+    ],
+    "error_samples": [
+      [
+        "status: Unimplemented, message: \"compact-blocks compatibility does not implement GetTreeState\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Mon, 16 Nov 2026 23:30:18 GMT\"} }",
+        225
+      ],
+      [
+        "status: Unimplemented, message: \"compact-blocks compatibility does not implement GetTreeState\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Mon, 16 Nov 2026 23:30:19 GMT\"} }",
+        69
+      ],
+      [
+        "status: Unimplemented, message: \"compact-blocks compatibility does not implement GetTreeState\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Mon, 16 Nov 2026 23:30:17 GMT\"} }",
+        206
+      ]
+    ]
+  }
+]
