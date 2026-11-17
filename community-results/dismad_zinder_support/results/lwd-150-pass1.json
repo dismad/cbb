@@ -1,0 +1,45 @@
+[
+  {
+    "name": "lwd",
+    "total_requests": 9000,
+    "errors": 134,
+    "error_rate": 0.014888888888888889,
+    "p50": 2.0,
+    "p95": 25.0,
+    "p99": 65.0,
+    "mean": 5.974509361606137,
+    "max": 146.0,
+    "wall_time_secs": 18.163364432,
+    "throughput_rps": 495.50291377427334,
+    "methods": [
+      {
+        "method": "GetTreeState",
+        "count": 1440,
+        "errors": 60,
+        "p50": 12.0,
+        "p95": 68.0,
+        "p99": 104.0,
+        "max": 146.0
+      },
+      {
+        "method": "GetBlockRange",
+        "count": 7426,
+        "errors": 74,
+        "p50": 2.0,
+        "p95": 8.0,
+        "p99": 22.0,
+        "max": 78.0
+      }
+    ],
+    "error_samples": [
+      [
+        "status: ResourceExhausted, message: \"h2 protocol error: http2 error\", details: [], metadata: MetadataMap { headers: {} }",
+        66
+      ],
+      [
+        "status: Cancelled, message: \"operation was canceled\", details: [], metadata: MetadataMap { headers: {} }",
+        68
+      ]
+    ]
+  }
+]

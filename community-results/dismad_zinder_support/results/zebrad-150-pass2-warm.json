@@ -1,0 +1,36 @@
+[
+  {
+    "name": "zebrad",
+    "total_requests": 9000,
+    "errors": 0,
+    "error_rate": 0.0,
+    "p50": 6903.0,
+    "p95": 8839.0,
+    "p99": 9375.0,
+    "mean": 6450.595333333336,
+    "max": 9775.0,
+    "wall_time_secs": 453.470421673,
+    "throughput_rps": 19.846939447111172,
+    "methods": [
+      {
+        "method": "GetTreeState",
+        "count": 1500,
+        "errors": 0,
+        "p50": 5687.0,
+        "p95": 7871.0,
+        "p99": 8663.0,
+        "max": 8919.0
+      },
+      {
+        "method": "GetBlockRange",
+        "count": 7500,
+        "errors": 0,
+        "p50": 7099.0,
+        "p95": 8999.0,
+        "p99": 9391.0,
+        "max": 9775.0
+      }
+    ],
+    "error_samples": []
+  }
+]

@@ -1,0 +1,80 @@
+[
+  {
+    "name": "zinder",
+    "total_requests": 12000,
+    "errors": 2000,
+    "error_rate": 0.16666666666666666,
+    "p50": 211.199,
+    "p95": 450.559,
+    "p99": 573.439,
+    "mean": 228.88356840000026,
+    "max": 808.447,
+    "wall_time_secs": 12.636293874,
+    "throughput_rps": 791.3712754477524,
+    "methods": [
+      {
+        "method": "GetBlockRange",
+        "count": 10000,
+        "errors": 0,
+        "p50": 211.199,
+        "p95": 450.559,
+        "p99": 573.439,
+        "max": 808.447
+      }
+    ],
+    "error_samples": [
+      [
+        "status: Unimplemented, message: \"compact-blocks compatibility does not implement GetTreeState\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Mon, 16 Nov 2026 23:31:36 GMT\"} }",
+        144
+      ],
+      [
+        "status: Unimplemented, message: \"compact-blocks compatibility does not implement GetTreeState\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Mon, 16 Nov 2026 23:31:39 GMT\"} }",
+        155
+      ],
+      [
+        "status: Unimplemented, message: \"compact-blocks compatibility does not implement GetTreeState\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Mon, 16 Nov 2026 23:31:43 GMT\"} }",
+        161
+      ],
+      [
+        "status: Unimplemented, message: \"compact-blocks compatibility does not implement GetTreeState\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Mon, 16 Nov 2026 23:31:40 GMT\"} }",
+        161
+      ],
+      [
+        "status: Unimplemented, message: \"compact-blocks compatibility does not implement GetTreeState\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Mon, 16 Nov 2026 23:31:35 GMT\"} }",
+        167
+      ],
+      [
+        "status: Unimplemented, message: \"compact-blocks compatibility does not implement GetTreeState\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Mon, 16 Nov 2026 23:31:32 GMT\"} }",
+        203
+      ],
+      [
+        "status: Unimplemented, message: \"compact-blocks compatibility does not implement GetTreeState\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Mon, 16 Nov 2026 23:31:42 GMT\"} }",
+        155
+      ],
+      [
+        "status: Unimplemented, message: \"compact-blocks compatibility does not implement GetTreeState\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Mon, 16 Nov 2026 23:31:33 GMT\"} }",
+        156
+      ],
+      [
+        "status: Unimplemented, message: \"compact-blocks compatibility does not implement GetTreeState\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Mon, 16 Nov 2026 23:31:34 GMT\"} }",
+        133
+      ],
+      [
+        "status: Unimplemented, message: \"compact-blocks compatibility does not implement GetTreeState\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Mon, 16 Nov 2026 23:31:37 GMT\"} }",
+        172
+      ],
+      [
+        "status: Unimplemented, message: \"compact-blocks compatibility does not implement GetTreeState\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Mon, 16 Nov 2026 23:31:38 GMT\"} }",
+        149
+      ],
+      [
+        "status: Unimplemented, message: \"compact-blocks compatibility does not implement GetTreeState\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Mon, 16 Nov 2026 23:31:41 GMT\"} }",
+        158
+      ],
+      [
+        "status: Unimplemented, message: \"compact-blocks compatibility does not implement GetTreeState\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Mon, 16 Nov 2026 23:31:44 GMT\"} }",
+        86
+      ]
+    ]
+  }
+]

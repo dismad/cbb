@@ -1,0 +1,27 @@
+[
+  {
+    "name": "zingod",
+    "total_requests": 2500,
+    "errors": 0,
+    "error_rate": 0.0,
+    "p50": 8.0,
+    "p95": 18.0,
+    "p99": 23.0,
+    "mean": 8.817599999999999,
+    "max": 36.0,
+    "wall_time_secs": 0.964869498,
+    "throughput_rps": 2591.0239728606284,
+    "methods": [
+      {
+        "method": "GetBlockRange",
+        "count": 2500,
+        "errors": 0,
+        "p50": 8.0,
+        "p95": 18.0,
+        "p99": 23.0,
+        "max": 36.0
+      }
+    ],
+    "error_samples": []
+  }
+]
