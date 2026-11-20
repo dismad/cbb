@@ -143,15 +143,8 @@ The graphing scripts understand all three filename styles and assign a distinct 
 
 ## Reading the results
 
-Each endpoint report includes the configured and connected wallet counts,
-connection failures, task failures, and any `GetLightdInfo` probe error.
-Check those fields when comparing results at a fixed concurrency. Setup and
-warm-up occur before the wall clock starts.
-
-`total_requests` and `errors` describe measured RPCs. A method with only
-failed attempts still appears with zero successes and its error count. Latency
-percentiles cover successful requests, so a zero-success method has no measured
-latency. With `--json`, diagnostics go to stderr.
+Check the configured and connected wallet counts before comparing throughput.
+RPC error counts cover measured calls, and latency covers successful calls.
 
 ### Summary table (`summarize.py`)
 

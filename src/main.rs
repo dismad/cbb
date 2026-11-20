@@ -1,5 +1,6 @@
 use clap::Parser;
 use hdrhistogram::Histogram;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Barrier;
@@ -85,7 +86,6 @@ fn rpc_error(status: tonic::Status) -> String {
 struct Sample {
     method: &'static str,
     latency_ms: f64,
-    ok: bool,
     error: Option<String>,
 }
 
@@ -136,7 +136,6 @@ async fn run_wallet(
         samples.push(Sample {
             method: "GetBlockRange",
             latency_ms: start.elapsed().as_secs_f64() * 1000.0,
-            ok: result.is_ok(),
             error: result.err(),
         });
 
@@ -153,7 +152,6 @@ async fn run_wallet(
             samples.push(Sample {
                 method: "GetTreeState",
                 latency_ms: elapsed,
-                ok: error.is_none(),
                 error,
             });
         }
@@ -164,24 +162,21 @@ async fn run_wallet(
     samples
 }
 
-fn summarize(name: &str, samples: &[Sample], status: RunStatus) -> Summary {
+fn summarize(name: &str, samples: &[Sample], wall_secs: f64, status: RunStatus) -> Summary {
     let mut hist = Histogram::<u64>::new_with_bounds(1, 60_000_000, 3).unwrap();
-    let mut errors = 0u64;
-    let mut error_msgs: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
-    let mut by_method: std::collections::HashMap<&str, Vec<f64>> = std::collections::HashMap::new();
-    let mut method_errors: std::collections::HashMap<&str, u64> = std::collections::HashMap::new();
+    let mut errors = 0;
+    let mut error_msgs = HashMap::new();
+    let mut by_method: HashMap<&str, (Vec<f64>, u64)> = HashMap::new();
 
-    for s in samples {
-        let method_samples = by_method.entry(s.method).or_default();
-        if s.ok {
-            let _ = hist.record((s.latency_ms * 1000.0) as u64);
-            method_samples.push(s.latency_ms);
-        } else {
+    for sample in samples {
+        let (latencies, method_errors) = by_method.entry(sample.method).or_default();
+        if let Some(message) = &sample.error {
             errors += 1;
-            *method_errors.entry(s.method).or_default() += 1;
-            if let Some(msg) = &s.error {
-                *error_msgs.entry(msg.clone()).or_default() += 1;
-            }
+            *method_errors += 1;
+            *error_msgs.entry(message.clone()).or_default() += 1;
+        } else {
+            let _ = hist.record((sample.latency_ms * 1000.0) as u64);
+            latencies.push(sample.latency_ms);
         }
     }
 
@@ -196,19 +191,19 @@ fn summarize(name: &str, samples: &[Sample], status: RunStatus) -> Summary {
         p99: hist.value_at_quantile(0.99) as f64 / 1000.0,
         mean: hist.mean() / 1000.0,
         max: hist.max() as f64 / 1000.0,
-        wall_time_secs: 0.0,
-        throughput_rps: 0.0,
+        wall_time_secs: wall_secs,
+        throughput_rps: if wall_secs > 0.0 { (total - errors) as f64 / wall_secs } else { 0.0 },
         methods: by_method
             .into_iter()
-            .map(|(m, v)| {
+            .map(|(method, (latencies, errors))| {
                 let mut h = Histogram::<u64>::new_with_bounds(1, 60_000_000, 3).unwrap();
-                for x in &v {
+                for x in &latencies {
                     let _ = h.record((*x * 1000.0) as u64);
                 }
                 MethodSummary {
-                    method: m.to_string(),
-                    count: v.len() as u64,
-                    errors: *method_errors.get(m).unwrap_or(&0),
+                    method: method.to_string(),
+                    count: latencies.len() as u64,
+                    errors,
                     p50: h.value_at_quantile(0.50) as f64 / 1000.0,
                     p95: h.value_at_quantile(0.95) as f64 / 1000.0,
                     p99: h.value_at_quantile(0.99) as f64 / 1000.0,
@@ -400,12 +395,7 @@ async fn run_endpoint(name: &str, endpoint: Endpoint, args: &Args, timeout: Dura
             }
         }
     }
-    let mut summary = summarize(name, &samples, status);
-    summary.wall_time_secs = wall_secs;
-    if wall_secs > 0.0 {
-        summary.throughput_rps = (summary.total_requests - summary.errors) as f64 / wall_secs;
-    }
-    summary
+    summarize(name, &samples, wall_secs, status)
 }
 
 #[tokio::main]
