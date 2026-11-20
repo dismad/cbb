@@ -81,7 +81,7 @@ sudo apt install python3-matplotlib
 
 ## Bench scripts
 
-The `bench-*.sh` scripts run a full concurrency sweep (50 / 100 / 150 / 200) for one endpoint, doing both a cold pass and a warm pass, and save JSON results under `results/`.
+The `bench-*.sh` scripts run two passes per concurrency (50 / 100 / 150 / 200) for one endpoint and save JSON results under `results/`.
 
 | Script                   | Endpoint                        | Notes                                          |
 | ------------------------ | ------------------------------- | ---------------------------------------------- |
@@ -102,7 +102,7 @@ Each script accepts an optional mode flag:
 
 Each script:
 - Uses `--steps 50`, `--chunk 100`, `--start-height 2000000`
-- Prints human-readable output, then writes JSON to `results/`
+- Prints a human-readable summary and saves JSON from the same run to `results/`
 - Can be edited if your ports or parameters differ
 
 ```bash
@@ -152,7 +152,7 @@ python3 summarize.py
 Prints every `results/*.json` sorted by indexer then concurrency, plus a delta table vs the best result in each group.
 
 - **Absolute table**: raw numbers (err%, p50/p95/p99 in ms, rps, wall time).
-- **Delta table**: percent difference from the best value at the same concurrency + warm/cold.
+- **Delta table**: percent difference from the best value at the same concurrency, workload, and pass.
 - Green = best (or tied)
 - Yellow = moderate regression
 - Red = large regression
@@ -171,7 +171,7 @@ python3 cold-warm-bars.py
 Produces PNG files in `graphs/` (linear and `_log` versions).
 
 - Line plots (`graph.py`): metric vs concurrency for each indexer.
-- Grouped bars (`cold-warm-bars.py`): cold (pass1) vs warm (pass2) side-by-side.
+- Grouped bars (`cold-warm-bars.py`): pass 1 and pass 2 side by side.
 - Log-scale versions make large spreads readable.
 
 Colors are consistent across all plots so you can track the same indexer easily. New indexers automatically receive a distinct color.
@@ -190,7 +190,7 @@ The more data points we have, the clearer the picture becomes for light-client o
 ## Notes
 
 - All endpoints should be pointed at the **same** underlying chain data for a fair comparison.
-- First run after indexer start is cold; re-run for warm-cache numbers.
+- Record how you prepare the server and OS caches for each pass.
 - Increase `--concurrency` and `--steps` to stress resource limits.
 - `target/` is gitignored — rebuild with `cargo build --release`.
 - `GetTreeState` performance can vary significantly between indexers. Use `--blockrange` to isolate `GetBlockRange` throughput.

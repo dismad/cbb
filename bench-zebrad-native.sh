@@ -24,15 +24,7 @@ for CONC in 50 100 150 200; do
     LABEL="pass${PASS}"
     [ "$PASS" = "2" ] && LABEL="pass2-warm"
     echo "======== concurrency=$CONC ($LABEL) ========"
-    # human-readable
-    ./target/release/cbb \
-      --endpoint "$ENDPOINT" \
-      --concurrency $CONC \
-      --steps $STEPS \
-      --chunk $CHUNK \
-      --start-height $START \
-      "${EXTRA_ARGS[@]}"
-    # JSON for graphing
+    # Print and save the same run
     ./target/release/cbb \
       --endpoint "$ENDPOINT" \
       --concurrency $CONC \
@@ -40,7 +32,7 @@ for CONC in 50 100 150 200; do
       --chunk $CHUNK \
       --start-height $START \
       "${EXTRA_ARGS[@]}" \
-      --json > "$OUTDIR/zebrad${TAG}-${CONC}-${LABEL}.json"
+      --json-out "$OUTDIR/zebrad${TAG}-${CONC}-${LABEL}.json"
     echo
   done
 done

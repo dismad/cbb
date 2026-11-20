@@ -132,9 +132,9 @@ def plot_bars(services, colors, title, ylabel, key, method=None, filename="bars.
             cold_vals = [max(v, 1e-4) for v in cold_vals]
             warm_vals = [max(v, 1e-4) for v in warm_vals]
         offset = (i * 2 - n_svc + 0.5) * bar_width
-        plt.bar(x + offset, cold_vals, bar_width, label=f"{svc} cold",
+        plt.bar(x + offset, cold_vals, bar_width, label=f"{svc} pass 1",
                 color=color, alpha=0.45, hatch="//", edgecolor=color)
-        plt.bar(x + offset + bar_width, warm_vals, bar_width, label=f"{svc} warm",
+        plt.bar(x + offset + bar_width, warm_vals, bar_width, label=f"{svc} pass 2",
                 color=color, alpha=0.9, edgecolor=color)
 
     plt.xlabel("concurrency (wallets)")
@@ -164,15 +164,15 @@ def main():
     print(f"colors: {colors}")
 
     specs = [
-        ("Error rate  (hatched = cold, solid = warm)", "error rate", "error_rate", None, "bar_error_rate"),
-        ("p95 latency  (hatched = cold, solid = warm)", "p95 (ms)", "p95", None, "bar_p95"),
-        ("p99 latency  (hatched = cold, solid = warm)", "p99 (ms)", "p99", None, "bar_p99"),
-        ("max latency  (hatched = cold, solid = warm)", "max (ms)", "max", None, "bar_max"),
-        ("GetBlockRange p95  (hatched = cold, solid = warm)", "p95 (ms)", "p95", "GetBlockRange", "bar_blockrange_p95"),
-        ("GetBlockRange errors  (hatched = cold, solid = warm)", "errors", "errors", "GetBlockRange", "bar_blockrange_errors"),
-        ("GetTreeState p95  (hatched = cold, solid = warm)", "p95 (ms)", "p95", "GetTreeState", "bar_treestate_p95"),
-        ("Throughput  (hatched = cold, solid = warm)", "requests/sec", "throughput_rps", None, "bar_throughput"),
-        ("Wall time  (hatched = cold, solid = warm)", "seconds", "wall_time_secs", None, "bar_wall_time"),
+        ("Error rate", "error rate", "error_rate", None, "bar_error_rate"),
+        ("p95 latency", "p95 (ms)", "p95", None, "bar_p95"),
+        ("p99 latency", "p99 (ms)", "p99", None, "bar_p99"),
+        ("max latency", "max (ms)", "max", None, "bar_max"),
+        ("GetBlockRange p95", "p95 (ms)", "p95", "GetBlockRange", "bar_blockrange_p95"),
+        ("GetBlockRange errors", "errors", "errors", "GetBlockRange", "bar_blockrange_errors"),
+        ("GetTreeState p95", "p95 (ms)", "p95", "GetTreeState", "bar_treestate_p95"),
+        ("Throughput", "requests/sec", "throughput_rps", None, "bar_throughput"),
+        ("Wall time", "seconds", "wall_time_secs", None, "bar_wall_time"),
     ]
 
     for title, ylabel, key, method, base in specs:
