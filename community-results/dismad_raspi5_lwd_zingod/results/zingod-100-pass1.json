@@ -1,0 +1,36 @@
+[
+  {
+    "name": "zingod",
+    "total_requests": 6000,
+    "errors": 0,
+    "error_rate": 0.0,
+    "p50": 464.383,
+    "p95": 927.743,
+    "p99": 1174.527,
+    "mean": 485.73890733333286,
+    "max": 1794.047,
+    "wall_time_secs": 30.788904866,
+    "throughput_rps": 194.87539508512248,
+    "methods": [
+      {
+        "method": "GetBlockRange",
+        "count": 5000,
+        "errors": 0,
+        "p50": 520.191,
+        "p95": 956.415,
+        "p99": 1188.863,
+        "max": 1794.047
+      },
+      {
+        "method": "GetTreeState",
+        "count": 1000,
+        "errors": 0,
+        "p50": 226.047,
+        "p95": 413.695,
+        "p99": 511.743,
+        "max": 633.343
+      }
+    ],
+    "error_samples": []
+  }
+]

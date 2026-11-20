@@ -1,0 +1,129 @@
+[
+  {
+    "name": "zingod",
+    "total_requests": 12000,
+    "errors": 6302,
+    "error_rate": 0.5251666666666667,
+    "p50": 489.727,
+    "p95": 1026.047,
+    "p99": 1275.903,
+    "mean": 517.5712499122495,
+    "max": 2160.639,
+    "wall_time_secs": 24.903108324,
+    "throughput_rps": 228.80677889147825,
+    "methods": [
+      {
+        "method": "GetTreeState",
+        "count": 960,
+        "errors": 1040,
+        "p50": 236.799,
+        "p95": 531.967,
+        "p99": 763.391,
+        "max": 1174.527
+      },
+      {
+        "method": "GetBlockRange",
+        "count": 4738,
+        "errors": 5262,
+        "p50": 552.447,
+        "p95": 1056.767,
+        "p99": 1299.455,
+        "max": 2160.639
+      }
+    ],
+    "error_samples": [
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:44 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        436
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:41 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        108
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:48 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        84
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:46 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        321
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:35 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        191
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:34 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        153
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:42 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        234
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:49 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        56
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:31 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        407
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:30 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        334
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:45 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        240
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:38 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        409
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:40 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        70
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:32 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        371
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:37 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        286
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:47 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        261
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:33 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        210
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:27 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        709
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:36 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        563
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:28 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        257
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:39 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        30
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:43 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        331
+      ],
+      [
+        "status: Unavailable, message: \"work stream limit reached\", details: [], metadata: MetadataMap { headers: {\"content-type\": \"application/grpc\", \"date\": \"Fri, 20 Nov 2026 02:26:29 GMT\", \"vary\": \"origin, access-control-request-method, access-control-request-headers\", \"grpc-retry-pushback-ms\": \"250\"} }",
+        241
+      ]
+    ]
+  }
+]

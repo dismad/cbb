@@ -1,0 +1,36 @@
+[
+  {
+    "name": "lwd",
+    "total_requests": 12000,
+    "errors": 0,
+    "error_rate": 0.0,
+    "p50": 2422.783,
+    "p95": 6242.303,
+    "p99": 8437.759,
+    "mean": 2708.27747466667,
+    "max": 14639.103,
+    "wall_time_secs": 171.954416136,
+    "throughput_rps": 69.78593670144018,
+    "methods": [
+      {
+        "method": "GetBlockRange",
+        "count": 10000,
+        "errors": 0,
+        "p50": 2629.631,
+        "p95": 6492.159,
+        "p99": 8749.055,
+        "max": 14639.103
+      },
+      {
+        "method": "GetTreeState",
+        "count": 2000,
+        "errors": 0,
+        "p50": 1532.927,
+        "p95": 4155.391,
+        "p99": 5423.103,
+        "max": 6926.335
+      }
+    ],
+    "error_samples": []
+  }
+]
