@@ -81,7 +81,7 @@ sudo apt install python3-matplotlib
 
 ## Bench scripts
 
-The `bench-*.sh` scripts run two passes per concurrency (50 / 100 / 150 / 200) for one endpoint and save JSON results under `results/`. Pass labels record run order. The scripts keep the server running across the sweep and each client warms up by default, so pass 1 does not establish an empty cache.
+The `bench-*.sh` scripts run two passes per concurrency (50 / 100 / 150 / 200) for one endpoint and save JSON results under `results/`.
 
 | Script                   | Endpoint                        | Notes                                          |
 | ------------------------ | ------------------------------- | ---------------------------------------------- |
@@ -171,7 +171,7 @@ python3 cold-warm-bars.py
 Produces PNG files in `graphs/` (linear and `_log` versions).
 
 - Line plots (`graph.py`): metric vs concurrency for each indexer.
-- Grouped bars (`cold-warm-bars.py`): pass 1 and pass 2 side by side, using the historical filenames.
+- Grouped bars (`cold-warm-bars.py`): pass 1 and pass 2 side by side.
 - Log-scale versions make large spreads readable.
 
 Colors are consistent across all plots so you can track the same indexer easily. New indexers automatically receive a distinct color.
@@ -190,7 +190,7 @@ The more data points we have, the clearer the picture becomes for light-client o
 ## Notes
 
 - All endpoints should be pointed at the **same** underlying chain data for a fair comparison.
-- Record how you prepare the server and OS caches for each pass. Restarting an indexer may leave the OS page cache populated.
+- Record how you prepare the server and OS caches for each pass.
 - Increase `--concurrency` and `--steps` to stress resource limits.
 - `target/` is gitignored — rebuild with `cargo build --release`.
 - `GetTreeState` performance can vary significantly between indexers. Use `--blockrange` to isolate `GetBlockRange` throughput.
