@@ -14,6 +14,7 @@ These are the original runs used for the graphs and summary tables.
   - zingod: 1.0.0
 - Notes:
 
+```
 [[trusted_validators]]
 jsonrpc_address = "127.0.0.1:8232"
 connect_timeout_secs = 2
@@ -47,5 +48,6 @@ max_connection_idle_secs = 1800
 adaptive_work_streams = true
 trusted_proxies = []
 shutdown_grace_secs = 10
+```
 
 
