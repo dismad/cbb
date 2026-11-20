@@ -1,6 +1,7 @@
 use clap::Parser;
 use hdrhistogram::Histogram;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Barrier;
@@ -37,7 +38,7 @@ struct Args {
     #[arg(long, default_value_t = 100)]
     chunk: u64,
 
-    /// How many sequential range requests each wallet makes
+    /// Measured range or tree-only requests per wallet
     #[arg(long, default_value_t = 20)]
     steps: u64,
 
@@ -48,6 +49,10 @@ struct Args {
     /// Also call GetTreeState every N range requests (0 = never)
     #[arg(long, default_value_t = 5)]
     tree_every: u64,
+
+    /// Run only GetTreeState with one unsigned decimal height per line
+    #[arg(long, value_name = "PATH")]
+    tree_heights_file: Option<PathBuf>,
 
     /// Connection and request timeout in seconds, including the whole block stream
     #[arg(long, default_value_t = 30)]
@@ -80,6 +85,42 @@ fn parse_endpoint(s: &str) -> Result<(String, String), String> {
 
 fn rpc_error(status: tonic::Status) -> String {
     format!("{:?}: {}", status.code(), status.message())
+}
+
+fn read_tree_heights(path: &Path) -> std::io::Result<Arc<[u64]>> {
+    let contents = std::fs::read_to_string(path).map_err(|error| {
+        std::io::Error::new(error.kind(), format!("{}: {error}", path.display()))
+    })?;
+    let mut heights = Vec::new();
+    let mut seen = HashSet::new();
+    for (index, line) in contents.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let invalid = |message: &str| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("{}:{}: {message}", path.display(), index + 1),
+            )
+        };
+        let height = line
+            .parse::<u64>()
+            .ok()
+            .filter(|_| line.bytes().all(|byte| byte.is_ascii_digit()))
+            .ok_or_else(|| invalid("expected an unsigned decimal height"))?;
+        if !seen.insert(height) {
+            return Err(invalid("duplicate height"));
+        }
+        heights.push(height);
+    }
+    if heights.is_empty() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("{}: expected at least one height", path.display()),
+        ));
+    }
+    Ok(heights.into())
 }
 
 #[derive(Debug, Clone)]
@@ -140,25 +181,56 @@ async fn run_wallet(
         });
 
         if tree_every > 0 && i % tree_every == 0 {
-            let id = BlockId { height, hash: vec![] };
             let start = Instant::now();
-            let result = tokio::time::timeout(timeout, client.get_tree_state(id)).await;
-            let elapsed = start.elapsed().as_secs_f64() * 1000.0;
-            let error = match result {
-                Ok(Ok(_)) => None,
-                Ok(Err(status)) => Some(rpc_error(status)),
-                Err(_) => Some("timeout".into()),
-            };
+            let result = fetch_tree_height(&mut client, height, timeout).await;
             samples.push(Sample {
                 method: "GetTreeState",
-                latency_ms: elapsed,
-                error,
+                latency_ms: start.elapsed().as_secs_f64() * 1000.0,
+                error: result.err(),
             });
         }
 
         height += chunk;
     }
 
+    samples
+}
+
+async fn fetch_tree_height(
+    client: &mut CompactTxStreamerClient<Channel>,
+    height: u64,
+    timeout: Duration,
+) -> Result<u64, String> {
+    let id = BlockId { height, hash: vec![] };
+    tokio::time::timeout(timeout, client.get_tree_state(id))
+        .await
+        .map_err(|_| "timeout".to_string())?
+        .map(|response| response.into_inner().height)
+        .map_err(rpc_error)
+}
+
+async fn run_tree_wallet(
+    mut client: CompactTxStreamerClient<Channel>,
+    heights: Arc<[u64]>,
+    mut index: usize,
+    steps: u64,
+    timeout: Duration,
+) -> Vec<Sample> {
+    let mut samples = Vec::new();
+    for _ in 0..steps {
+        let height = heights[index];
+        let start = Instant::now();
+        let result = fetch_tree_height(&mut client, height, timeout).await;
+        let elapsed = start.elapsed().as_secs_f64() * 1000.0;
+        let error = match result {
+            Ok(actual) if actual != height => {
+                Some(format!("GetTreeState returned height {actual}, expected {height}"))
+            }
+            result => result.err(),
+        };
+        samples.push(Sample { method: "GetTreeState", latency_ms: elapsed, error });
+        index = (index + 1) % heights.len();
+    }
     samples
 }
 
@@ -320,8 +392,23 @@ async fn probe(endpoint: &Endpoint, timeout: Duration) -> Result<(), String> {
     Ok(())
 }
 
-async fn run_endpoint(name: &str, endpoint: Endpoint, args: &Args, timeout: Duration) -> Summary {
-    let probe_error = probe(&endpoint, timeout).await.err();
+enum WalletWorkload {
+    Ranges(u64),
+    Trees { heights: Arc<[u64]>, index: usize },
+}
+
+async fn run_endpoint(
+    name: &str,
+    endpoint: Endpoint,
+    args: &Args,
+    tree_heights: Option<Arc<[u64]>>,
+    timeout: Duration,
+) -> Summary {
+    let probe_error = if tree_heights.is_some() {
+        None
+    } else {
+        probe(&endpoint, timeout).await.err()
+    };
     if let Some(error) = &probe_error {
         eprintln!("  {error}");
     }
@@ -330,15 +417,26 @@ async fn run_endpoint(name: &str, endpoint: Endpoint, args: &Args, timeout: Dura
     let steps = args.steps;
     let tree_every = args.tree_every;
     let warmup = args.warmup;
+    let start_height = args.start_height;
     let setup = (0..args.concurrency).map(|wallet| {
-        let start = args.start_height + wallet as u64 * 10;
         let endpoint = endpoint.clone();
+        let tree_heights = tree_heights.clone();
         tokio::spawn(async move {
             let mut client = connect(&endpoint, timeout).await?;
-            for step in 0..warmup {
-                let _ = fetch_range(&mut client, start + step * chunk, chunk, timeout).await;
-            }
-            Ok::<_, String>((client, start + warmup * chunk))
+            let workload = if let Some(heights) = tree_heights {
+                let index = (wallet as u128 * u128::from(steps) % heights.len() as u128) as usize;
+                for _ in 0..warmup {
+                    let _ = fetch_tree_height(&mut client, heights[index], timeout).await;
+                }
+                WalletWorkload::Trees { heights, index }
+            } else {
+                let start = start_height + wallet as u64 * 10;
+                for step in 0..warmup {
+                    let _ = fetch_range(&mut client, start + step * chunk, chunk, timeout).await;
+                }
+                WalletWorkload::Ranges(start + warmup * chunk)
+            };
+            Ok::<_, String>((client, workload))
         })
     });
 
@@ -372,11 +470,18 @@ async fn run_endpoint(name: &str, endpoint: Endpoint, args: &Args, timeout: Dura
     let start_line = Arc::new(Barrier::new(ready.len() + 1));
     let tasks = ready
         .into_iter()
-        .map(|(client, start)| {
+        .map(|(client, workload)| {
             let start_line = Arc::clone(&start_line);
             tokio::spawn(async move {
                 start_line.wait().await;
-                run_wallet(client, start, chunk, steps, tree_every, timeout).await
+                match workload {
+                    WalletWorkload::Ranges(start) => {
+                        run_wallet(client, start, chunk, steps, tree_every, timeout).await
+                    }
+                    WalletWorkload::Trees { heights, index } => {
+                        run_tree_wallet(client, heights, index, steps, timeout).await
+                    }
+                }
             })
         })
         .collect::<Vec<_>>();
@@ -409,6 +514,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let timeout = Duration::from_secs(args.timeout);
+    let tree_heights = args
+        .tree_heights_file
+        .as_deref()
+        .map(read_tree_heights)
+        .transpose()?;
     let mut all_summaries = Vec::new();
 
     for (name, url) in &args.endpoint {
@@ -428,7 +538,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        let summary = run_endpoint(name, endpoint, &args, timeout).await;
+        let summary = run_endpoint(name, endpoint, &args, tree_heights.clone(), timeout).await;
         if !args.json {
             print_summary(&summary);
             println!(
