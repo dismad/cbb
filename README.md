@@ -66,7 +66,7 @@ sudo apt install python3-matplotlib
 | `--steps`             | 20      | Sequential range requests per wallet                   |
 | `--start-height`      | 2000000 | Starting height (wallets are offset)                   |
 | `--tree-every`        | 5       | Call `GetTreeState` every N range requests (0 = never) |
-| `--timeout`           | 30      | Request timeout in seconds                             |
+| `--timeout`           | 30      | Timeout in seconds per connection or request          |
 | `--warmup`            | 2       | Warm-up requests per wallet (not counted)              |
 | `--json`              | false   | Emit JSON summary instead of text                      |
 
@@ -142,6 +142,16 @@ python3 cold-warm-bars.py
 The graphing scripts understand all three filename styles and assign a distinct color to every indexer.
 
 ## Reading the results
+
+Each endpoint report includes the configured and connected wallet counts,
+connection failures, task failures, and any `GetLightdInfo` probe error.
+Check those fields when comparing results at a fixed concurrency. Setup and
+warm-up occur before the wall clock starts.
+
+`total_requests` and `errors` describe measured RPCs. A method with only
+failed attempts still appears with zero successes and its error count. Latency
+percentiles cover successful requests, so a zero-success method has no measured
+latency. With `--json`, diagnostics go to stderr.
 
 ### Summary table (`summarize.py`)
 
