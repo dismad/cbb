@@ -1,9 +1,10 @@
 use clap::Parser;
 use hdrhistogram::Histogram;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Barrier;
-use tonic::transport::Channel;
+use tonic::transport::{Channel, Endpoint};
 
 pub mod cash {
     pub mod z {
@@ -48,7 +49,7 @@ struct Args {
     #[arg(long, default_value_t = 5)]
     tree_every: u64,
 
-    /// Request timeout in seconds, covering the whole block stream
+    /// Connection and request timeout in seconds, including the whole block stream
     #[arg(long, default_value_t = 30)]
     timeout: u64,
 
@@ -77,11 +78,14 @@ fn parse_endpoint(s: &str) -> Result<(String, String), String> {
     Ok((name.to_string(), url.to_string()))
 }
 
+fn rpc_error(status: tonic::Status) -> String {
+    format!("{:?}: {}", status.code(), status.message())
+}
+
 #[derive(Debug, Clone)]
 struct Sample {
     method: &'static str,
     latency_ms: f64,
-    ok: bool,
     error: Option<String>,
 }
 
@@ -99,9 +103,9 @@ async fn fetch_range(
         end: Some(BlockId { height: end, hash: vec![] }),
     };
     let drain = async {
-        let mut stream = client.get_block_range(req).await.map_err(|s| s.to_string())?.into_inner();
+        let mut stream = client.get_block_range(req).await.map_err(rpc_error)?.into_inner();
         let mut next = height;
-        while let Some(block) = stream.message().await.map_err(|s| s.to_string())? {
+        while let Some(block) = stream.message().await.map_err(rpc_error)? {
             if block.height != next {
                 return Err("block out of order".to_string());
             }
@@ -132,7 +136,6 @@ async fn run_wallet(
         samples.push(Sample {
             method: "GetBlockRange",
             latency_ms: start.elapsed().as_secs_f64() * 1000.0,
-            ok: result.is_ok(),
             error: result.err(),
         });
 
@@ -141,15 +144,15 @@ async fn run_wallet(
             let start = Instant::now();
             let result = tokio::time::timeout(timeout, client.get_tree_state(id)).await;
             let elapsed = start.elapsed().as_secs_f64() * 1000.0;
+            let error = match result {
+                Ok(Ok(_)) => None,
+                Ok(Err(status)) => Some(rpc_error(status)),
+                Err(_) => Some("timeout".into()),
+            };
             samples.push(Sample {
                 method: "GetTreeState",
                 latency_ms: elapsed,
-                ok: result.is_ok() && result.as_ref().unwrap().is_ok(),
-                error: match &result {
-                    Ok(Ok(_)) => None,
-                    Ok(Err(status)) => Some(status.to_string()),
-                    Err(_) => Some("timeout".into()),
-                },
+                error,
             });
         }
 
@@ -159,23 +162,21 @@ async fn run_wallet(
     samples
 }
 
-fn summarize(name: &str, samples: &[Sample]) -> Summary {
+fn summarize(name: &str, samples: &[Sample], wall_secs: f64, status: RunStatus) -> Summary {
     let mut hist = Histogram::<u64>::new_with_bounds(1, 60_000_000, 3).unwrap();
-    let mut errors = 0u64;
-    let mut error_msgs: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
-    let mut by_method: std::collections::HashMap<&str, Vec<f64>> = std::collections::HashMap::new();
-    let mut method_errors: std::collections::HashMap<&str, u64> = std::collections::HashMap::new();
+    let mut errors = 0;
+    let mut error_msgs = HashMap::new();
+    let mut by_method: HashMap<&str, (Vec<f64>, u64)> = HashMap::new();
 
-    for s in samples {
-        if s.ok {
-            let _ = hist.record((s.latency_ms * 1000.0) as u64);
-            by_method.entry(s.method).or_default().push(s.latency_ms);
-        } else {
+    for sample in samples {
+        let (latencies, method_errors) = by_method.entry(sample.method).or_default();
+        if let Some(message) = &sample.error {
             errors += 1;
-            *method_errors.entry(s.method).or_default() += 1;
-            if let Some(msg) = &s.error {
-                *error_msgs.entry(msg.clone()).or_default() += 1;
-            }
+            *method_errors += 1;
+            *error_msgs.entry(message.clone()).or_default() += 1;
+        } else {
+            let _ = hist.record((sample.latency_ms * 1000.0) as u64);
+            latencies.push(sample.latency_ms);
         }
     }
 
@@ -190,19 +191,19 @@ fn summarize(name: &str, samples: &[Sample]) -> Summary {
         p99: hist.value_at_quantile(0.99) as f64 / 1000.0,
         mean: hist.mean() / 1000.0,
         max: hist.max() as f64 / 1000.0,
-        wall_time_secs: 0.0,
-        throughput_rps: 0.0,
+        wall_time_secs: wall_secs,
+        throughput_rps: if wall_secs > 0.0 { (total - errors) as f64 / wall_secs } else { 0.0 },
         methods: by_method
             .into_iter()
-            .map(|(m, v)| {
+            .map(|(method, (latencies, errors))| {
                 let mut h = Histogram::<u64>::new_with_bounds(1, 60_000_000, 3).unwrap();
-                for x in &v {
+                for x in &latencies {
                     let _ = h.record((*x * 1000.0) as u64);
                 }
                 MethodSummary {
-                    method: m.to_string(),
-                    count: v.len() as u64,
-                    errors: *method_errors.get(m).unwrap_or(&0),
+                    method: method.to_string(),
+                    count: latencies.len() as u64,
+                    errors,
                     p50: h.value_at_quantile(0.50) as f64 / 1000.0,
                     p95: h.value_at_quantile(0.95) as f64 / 1000.0,
                     p99: h.value_at_quantile(0.99) as f64 / 1000.0,
@@ -211,6 +212,7 @@ fn summarize(name: &str, samples: &[Sample]) -> Summary {
             })
             .collect(),
         error_samples: error_msgs.into_iter().collect(),
+        status,
     }
 }
 
@@ -223,6 +225,15 @@ struct MethodSummary {
     p95: f64,
     p99: f64,
     max: f64,
+}
+
+#[derive(Debug, serde::Serialize)]
+struct RunStatus {
+    wallets_configured: usize,
+    wallets_connected: usize,
+    wallet_connection_errors: usize,
+    wallet_task_errors: usize,
+    probe_error: Option<String>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -240,10 +251,22 @@ struct Summary {
     throughput_rps: f64,
     methods: Vec<MethodSummary>,
     error_samples: Vec<(String, u64)>,
+    #[serde(flatten)]
+    status: RunStatus,
 }
 
 fn print_summary(s: &Summary) {
     println!("── {} ──", s.name);
+    println!(
+        "  wallets connected: {}/{}   connection errors: {}   wallet task errors: {}",
+        s.status.wallets_connected,
+        s.status.wallets_configured,
+        s.status.wallet_connection_errors,
+        s.status.wallet_task_errors,
+    );
+    if let Some(error) = &s.status.probe_error {
+        println!("  probe error: {error}");
+    }
     println!(
         "  requests: {}   errors: {} ({:.1}%)",
         s.total_requests, s.errors, s.error_rate * 100.0
@@ -273,6 +296,108 @@ fn print_summary(s: &Summary) {
     }
 }
 
+async fn connect(
+    endpoint: &Endpoint,
+    timeout: Duration,
+) -> Result<CompactTxStreamerClient<Channel>, String> {
+    tokio::time::timeout(timeout, endpoint.connect())
+        .await
+        .map_err(|_| "connection timed out".to_owned())?
+        .map(CompactTxStreamerClient::new)
+        .map_err(|error| error.to_string())
+}
+
+async fn probe(endpoint: &Endpoint, timeout: Duration) -> Result<(), String> {
+    let mut client = connect(endpoint, timeout)
+        .await
+        .map_err(|error| format!("probe connection failed: {error}"))?;
+    let response = tokio::time::timeout(timeout, client.get_lightd_info(ChainSpec {}))
+        .await
+        .map_err(|_| "GetLightdInfo timed out".to_owned())?
+        .map_err(|error| format!("GetLightdInfo failed: {}", rpc_error(error)))?;
+    let info = response.into_inner();
+    eprintln!("  vendor={} chain={} height={}", info.vendor, info.chain_name, info.block_height);
+    Ok(())
+}
+
+async fn run_endpoint(name: &str, endpoint: Endpoint, args: &Args, timeout: Duration) -> Summary {
+    let probe_error = probe(&endpoint, timeout).await.err();
+    if let Some(error) = &probe_error {
+        eprintln!("  {error}");
+    }
+
+    let chunk = args.chunk;
+    let steps = args.steps;
+    let tree_every = args.tree_every;
+    let warmup = args.warmup;
+    let setup = (0..args.concurrency).map(|wallet| {
+        let start = args.start_height + wallet as u64 * 10;
+        let endpoint = endpoint.clone();
+        tokio::spawn(async move {
+            let mut client = connect(&endpoint, timeout).await?;
+            for step in 0..warmup {
+                let _ = fetch_range(&mut client, start + step * chunk, chunk, timeout).await;
+            }
+            Ok::<_, String>((client, start + warmup * chunk))
+        })
+    });
+
+    let mut status = RunStatus {
+        wallets_configured: args.concurrency,
+        wallets_connected: 0,
+        wallet_connection_errors: 0,
+        wallet_task_errors: 0,
+        probe_error,
+    };
+    let mut ready = Vec::new();
+    for result in futures::future::join_all(setup).await {
+        match result {
+            Ok(Ok(wallet)) => ready.push(wallet),
+            Ok(Err(error)) => {
+                status.wallet_connection_errors += 1;
+                eprintln!("  wallet connection failed: {error}");
+            }
+            Err(error) => {
+                status.wallet_task_errors += 1;
+                eprintln!("  wallet setup failed: {error}");
+            }
+        }
+    }
+    status.wallets_connected = ready.len();
+    eprintln!(
+        "  running {}/{} wallets × {steps} steps (one connection each)...",
+        status.wallets_connected, status.wallets_configured,
+    );
+
+    let start_line = Arc::new(Barrier::new(ready.len() + 1));
+    let tasks = ready
+        .into_iter()
+        .map(|(client, start)| {
+            let start_line = Arc::clone(&start_line);
+            tokio::spawn(async move {
+                start_line.wait().await;
+                run_wallet(client, start, chunk, steps, tree_every, timeout).await
+            })
+        })
+        .collect::<Vec<_>>();
+    let wall_start = Instant::now();
+    start_line.wait().await;
+    let results = futures::future::join_all(tasks).await;
+    let wall_secs = wall_start.elapsed().as_secs_f64();
+
+    let mut samples = Vec::new();
+    for result in results {
+        match result {
+            Ok(wallet_samples) => samples.extend(wallet_samples),
+            Err(error) => {
+                status.wallet_task_errors += 1;
+                eprintln!("  wallet measurement failed: {error}");
+            }
+        }
+    }
+    summarize(name, &samples, wall_secs, status)
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
@@ -290,7 +415,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("Connecting to {} ({})...", name, url);
 
         // build the endpoint template (TLS config applied per connection below)
-        let mut endpoint = Channel::from_shared(url.clone()).unwrap().timeout(timeout);
+        let mut endpoint = Channel::from_shared(url.clone())?.timeout(timeout);
         if let Some(ca_path) = &args.tls_ca {
             if url.starts_with("https") {
                 let pem = std::fs::read(ca_path)
@@ -303,72 +428,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        // quick health check
-        match endpoint.connect().await {
-            Ok(ch) => {
-                let mut probe = CompactTxStreamerClient::new(ch);
-                match tokio::time::timeout(timeout, probe.get_lightd_info(ChainSpec {})).await {
-                    Ok(Ok(info)) => {
-                        let i = info.into_inner();
-                        eprintln!("  vendor={} chain={} height={}", i.vendor, i.chain_name, i.block_height);
-                    }
-                    _ => println!("  (GetLightdInfo failed or timed out, continuing anyway)"),
-                }
-            }
-            Err(e) => {
-                eprintln!("  failed to connect: {}", e);
-                continue;
-            }
-        }
-
-        let mut tasks = Vec::new();
-        let chunk = args.chunk;
-        let steps = args.steps;
-        let tree_every = args.tree_every;
-        let warmup = args.warmup;
-        // the clock starts once every wallet (and this task) has connected and warmed up
-        let start_line = Arc::new(Barrier::new(args.concurrency + 1));
-
-        for w in 0..args.concurrency {
-            let start = args.start_height + (w as u64 * 10);
-            // clone the configured endpoint so each wallet gets its own connection
-            let ep = endpoint.clone();
-            let start_line = Arc::clone(&start_line);
-            tasks.push(tokio::spawn(async move {
-                let channel = match ep.connect().await {
-                    Ok(c) => c,
-                    Err(e) => {
-                        eprintln!("wallet connect failed: {}", e);
-                        start_line.wait().await;
-                        return Vec::new();
-                    }
-                };
-                let mut client = CompactTxStreamerClient::new(channel);
-                // warm-up (not recorded)
-                for i in 0..warmup {
-                    let _ = fetch_range(&mut client, start + i * chunk, chunk, timeout).await;
-                }
-                start_line.wait().await;
-                run_wallet(client, start + warmup * chunk, chunk, steps, tree_every, timeout).await
-            }));
-        }
-
-        eprintln!("  running {} wallets × {} steps (one connection each)...", args.concurrency, args.steps);
-        start_line.wait().await;
-        let wall_start = Instant::now();
-        let results = futures::future::join_all(tasks).await;
-        let wall_elapsed = wall_start.elapsed();
-        let samples: Vec<Sample> = results.into_iter().filter_map(|r| r.ok()).flatten().collect();
-
-        let mut summary = summarize(name, &samples);
-        let wall_secs = wall_elapsed.as_secs_f64();
-        let completed = samples.iter().filter(|s| s.ok).count();
-        let rps = if wall_secs > 0.0 { completed as f64 / wall_secs } else { 0.0 };
-        summary.wall_time_secs = wall_secs;
-        summary.throughput_rps = rps;
+        let summary = run_endpoint(name, endpoint, &args, timeout).await;
         if !args.json {
             print_summary(&summary);
-            println!("  wall time: {:.2}s   throughput: {:.0} req/s", wall_secs, rps);
+            println!(
+                "  wall time: {:.2}s   throughput: {:.0} req/s",
+                summary.wall_time_secs, summary.throughput_rps
+            );
             println!();
         }
         all_summaries.push(summary);
