@@ -3,16 +3,22 @@
 These are the original runs used for the graphs and summary tables.
 
 ## Machine
-- CPU: Intel Core Ultra 9 185H (16 cores / 16 threads, up to 5.1 GHz)
-- RAM: 30 GiB
-- OS: Ubuntu 26.04.1 LTS
-- Kernel: 7.0.0-42-generic
-- Zebra version: v7.0.0+git.e8db87e ( w' indexed flag )
-- Indexer versions:
-  - lightwalletd: v0.6.1 (commit 0bf0a40854de6bd9a50400f94f0f94fbb53ac743, built 2026-11-07 by zktails)
-  - zainod: 0.10.1
-  - zingod: 1.0.0
-- Notes:
+
+
+- **OS:** Ubuntu 26.04.1 LTS aarch64  
+- **Host:** Raspberry Pi 5 Model B Rev 1.0  
+- **Kernel:** 6.17.0-1017-raspi  
+- **Uptime:** 29 days, 1 hour, 1 min  
+- **Packages:** 2273 (dpkg), 22 (snap)  
+- **Shell:** bash 5.3.9  
+- **Resolution:** 3440x1440  
+- **Terminal:** /dev/pts/0  
+- **CPU:** (4) @ 2.400GHz  
+- **Memory:** 4089MiB / 7930MiB
+
+- lwd 0.60
+- zingod 1.1.0
+
 
 ```
 [[trusted_validators]]
