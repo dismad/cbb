@@ -111,7 +111,7 @@ def series(rows, key, method=None):
     for conc, s in rows:
         if method:
             m = next((x for x in s.get("methods", []) if x["method"] == method), None)
-            if not m:
+            if not m or (key != "errors" and m.get("count") == 0):
                 continue
             val = m.get(key, 0)
         else:

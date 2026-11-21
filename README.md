@@ -66,7 +66,7 @@ sudo apt install python3-matplotlib
 | `--steps`             | 20      | Sequential range requests per wallet                   |
 | `--start-height`      | 2000000 | Starting height (wallets are offset)                   |
 | `--tree-every`        | 5       | Call `GetTreeState` every N range requests (0 = never) |
-| `--timeout`           | 30      | Request timeout in seconds                             |
+| `--timeout`           | 30      | Timeout in seconds per connection or request          |
 | `--warmup`            | 2       | Warm-up requests per wallet (not counted)              |
 | `--json`              | false   | Emit JSON summary instead of text                      |
 
@@ -142,6 +142,9 @@ python3 cold-warm-bars.py
 The graphing scripts understand all three filename styles and assign a distinct color to every indexer.
 
 ## Reading the results
+
+Check the configured and connected wallet counts before comparing throughput.
+RPC error counts cover measured calls, and latency covers successful calls.
 
 ### Summary table (`summarize.py`)
 

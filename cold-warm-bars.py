@@ -100,7 +100,9 @@ def detect_services():
 def get_val(summary, key, method=None):
     if method:
         m = next((x for x in summary.get("methods", []) if x["method"] == method), None)
-        return m.get(key, 0) if m else 0
+        if m and (key == "errors" or m.get("count") != 0):
+            return m.get(key, 0)
+        return np.nan
     return summary.get(key, 0)
 
 def plot_bars(services, colors, title, ylabel, key, method=None, filename="bars.png", logy=False):
