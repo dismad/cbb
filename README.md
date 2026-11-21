@@ -63,12 +63,16 @@ sudo apt install python3-matplotlib
 | `--endpoint name=url` | —       | Repeatable. At least one required.                     |
 | `--concurrency`       | 50      | Number of virtual wallets                              |
 | `--chunk`             | 100     | Blocks per `GetBlockRange`                             |
-| `--steps`             | 20      | Sequential range requests per wallet                   |
+| `--steps`             | 20      | Measured range or tree-only requests per wallet                   |
 | `--start-height`      | 2000000 | Starting height (wallets are offset)                   |
 | `--tree-every`        | 5       | Call `GetTreeState` every N range requests (0 = never) |
+| `--tree-heights-file PATH` | —   | Run only `GetTreeState` at heights from a file |
 | `--timeout`           | 30      | Timeout in seconds per connection or request          |
 | `--warmup`            | 2       | Warm-up requests per wallet (not counted)              |
 | `--json`              | false   | Emit JSON summary instead of text                      |
+
+For tree-only runs, list one distinct block height per line. Each endpoint uses
+the same cyclic schedule, and warm-up repeats each wallet's first height.
 
 ## What it measures
 
