@@ -1,0 +1,41 @@
+[
+  {
+    "name": "zingod",
+    "total_requests": 12000,
+    "errors": 0,
+    "error_rate": 0.0,
+    "p50": 846.335,
+    "p95": 1738.751,
+    "p99": 2119.679,
+    "mean": 884.5519406666654,
+    "max": 3686.399,
+    "wall_time_secs": 55.798323669,
+    "throughput_rps": 215.0602242315546,
+    "methods": [
+      {
+        "method": "GetTreeState",
+        "count": 2000,
+        "errors": 0,
+        "p50": 373.503,
+        "p95": 786.431,
+        "p99": 1013.759,
+        "max": 1424.383
+      },
+      {
+        "method": "GetBlockRange",
+        "count": 10000,
+        "errors": 0,
+        "p50": 940.543,
+        "p95": 1779.711,
+        "p99": 2168.831,
+        "max": 3686.399
+      }
+    ],
+    "error_samples": [],
+    "wallets_configured": 200,
+    "wallets_connected": 200,
+    "wallet_connection_errors": 0,
+    "wallet_task_errors": 0,
+    "probe_error": null
+  }
+]
