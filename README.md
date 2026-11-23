@@ -7,9 +7,10 @@ Compares **lightwalletd**, **zainod**, **zingod**, **zebrad native**, **ztreamer
 
 
 > **Note on throughput (req/s):**  
-Throughput is `total_requests / wall_time`, counting every request (`GetBlockRange` + `GetTreeState`).  
+Throughput is `(total_requests - errors) / wall_time`: only successful requests count, across `GetBlockRange` and `GetTreeState`.
+Wall time runs from the shared start line to the last wallet finishing, so connection setup and warm-up are excluded.
 A fast method can raise the number even when another method is slow.  
-For a pure block-serving comparison use `--blockrange`; for tree-state cost look at `GetTreeState` latencies.
+For a pure block-serving comparison use `--tree-every 0` (the bench scripts' `--blockrange` option); for tree-state cost look at `GetTreeState` latencies.
 
 
 ### BlockRange only
@@ -70,17 +71,46 @@ sudo apt install python3-matplotlib
 | `--timeout`           | 30      | Timeout in seconds per connection or request          |
 | `--warmup`            | 2       | Warm-up requests per wallet (not counted)              |
 | `--json`              | false   | Emit JSON summary instead of text                      |
+| `--range-order asc\|desc` | asc | Direction of each `GetBlockRange`; both cover the same height intervals |
+| `--strict`            | false   | Exit nonzero on missing work or any probe, RPC, connection, or task failure |
+| `--expect-chain NAME` | —       | Before measuring, require `GetLightdInfo` to report this chain name |
+| `--expect-tip HEIGHT:HASH_HEX` | — | Before measuring, require `GetLatestBlock` to report this tip |
 
 For tree-only runs, list one distinct block height per line. Each endpoint uses
 the same cyclic schedule, and warm-up repeats each wallet's first height.
 
+### Strict runs
+
+Mixed and tree-only runs count a reply for the wrong `GetTreeState` height
+as a failed request. `--strict` makes the command exit nonzero after writing
+its reports if any wallet fails to connect, the requested work is incomplete,
+or a probe, task, warm-up, or measured request failed.
+
+`--expect-chain` and `--expect-tip` check endpoint identity before wallet
+connections and outside the measured window. The probe uses `--timeout`. A
+failed check sets `probe_error`, skips that endpoint, and makes the command
+exit nonzero. Specify the tip hash as 64 hex digits in the server's byte order.
+For lightwalletd this is the reverse of the hash block explorers display.
+Tree-only runs skip the probe unless either expectation is set.
+
+### Range direction
+
+`--range-order desc` requests each interval from its highest height down, so a
+run covers the same heights as an ascending one. Every stream must arrive in
+exactly the requested order with no missing or extra block, or the request
+fails.
+
 ## What it measures
 
 - `GetBlockRange` latency (full stream drain)
+- `GetBlockRange` first-block latency, longest gap between blocks (streams of
+  two or more blocks), delivered blocks, and blocks per second of wall time
+  from successful streams. The range method's JSON reports `first_block`,
+  `max_block_gap`, `blocks`, and `blocks_per_sec` when there are eligible samples.
 - Occasional `GetTreeState`
 - Error rate and timeouts
 - p50 / p95 / p99 / max
-- Throughput (requests/sec)
+- Throughput (successful requests/sec across the run and by method)
 - Per-method breakdown
 
 ## Bench scripts
