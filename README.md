@@ -72,19 +72,20 @@ sudo apt install python3-matplotlib
 | `--warmup`            | 2       | Warm-up requests per wallet (not counted)              |
 | `--json`              | false   | Emit JSON summary instead of text                      |
 | `--range-order asc\|desc` | asc | Direction of each `GetBlockRange`; both cover the same height intervals |
-| `--strict`            | false   | Exit nonzero on missing work or any probe, RPC, connection, or task failure |
 | `--expect-chain NAME` | —       | Before measuring, require `GetLightdInfo` to report this chain name |
 | `--expect-tip HEIGHT:HASH_HEX` | — | Before measuring, require `GetLatestBlock` to report this tip |
 
 For tree-only runs, list one distinct block height per line. Each endpoint uses
 the same cyclic schedule, and warm-up repeats each wallet's first height.
 
-### Strict runs
+### Run validation
 
-Mixed and tree-only runs count a reply for the wrong `GetTreeState` height
-as a failed request. `--strict` makes the command exit nonzero after writing
-its reports if any wallet fails to connect, the requested work is incomplete,
-or a probe, task, warm-up, or measured request failed.
+CBB requires every configured wallet to connect and complete the expected
+number of successful calls for each method. A wrong `GetTreeState` height,
+an incomplete or out-of-order `GetBlockRange` stream, or a failed probe, task,
+warm-up, or measured request makes the run fail. CBB writes the collected
+reports before returning a nonzero exit status so failed runs can still be
+inspected.
 
 `--expect-chain` and `--expect-tip` check endpoint identity before wallet
 connections and outside the measured window. The probe uses `--timeout`. A
@@ -137,6 +138,7 @@ Each script accepts an optional mode flag:
 Each script:
 - Uses `--steps 50`, `--chunk 100`, `--start-height 2000000`
 - Prints a human-readable summary and saves JSON from the same run to `results/`
+- Runs every trial and exits nonzero if any trial fails
 - Can be edited if your ports or parameters differ
 
 ```bash

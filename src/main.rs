@@ -78,10 +78,6 @@ struct Args {
     #[arg(long)]
     tls_ca: Option<String>,
 
-    /// Exit nonzero when work is missing or a probe, RPC, connection, or task fails
-    #[arg(long)]
-    strict: bool,
-
     /// Before measuring, require GetLightdInfo to report this chain name
     #[arg(long, value_name = "NAME")]
     expect_chain: Option<String>,
@@ -780,8 +776,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut failed = false;
     for summary in &all_summaries {
-        let identity_failed = args.checks_identity() && summary.status.probe_error.is_some();
-        if identity_failed || (args.strict && summary.has_failures(&args)) {
+        if summary.has_failures(&args) {
             eprintln!("{}: benchmark did not complete successfully", summary.name);
             failed = true;
         }
@@ -798,7 +793,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn strict_requires_the_complete_mixed_workload() {
+    fn validation_requires_the_complete_mixed_workload() {
         let args = Args::parse_from(["cbb", "--concurrency", "2", "--steps", "6", "--tree-every", "5"]);
         let status = || RunStatus {
             wallets_configured: 2,
