@@ -20,8 +20,21 @@ pub mod cash {
 }
 
 use cash::z::wallet::sdk::rpc::{
-    compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange, ChainSpec,
+    compact_tx_streamer_client::CompactTxStreamerClient, BlockId, BlockRange, ChainSpec, TxFilter,
 };
+
+/// Blocks downloaded from --start-height to collect transaction IDs for --tx.
+const TX_SOURCE_BLOCKS: u64 = 1_000;
+/// Blocks per GetBlockRange while collecting transaction IDs.
+const TX_SOURCE_BATCH: u64 = 100;
+
+/// A mined transaction to request: its ID as sent in CompactTx.hash and the
+/// height of the block it came from.
+#[derive(Debug, Clone)]
+struct TxRef {
+    hash: Vec<u8>,
+    height: u64,
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "cbb", about = "Compact Block Bench for Zcash lightclient servers")]
@@ -38,11 +51,11 @@ struct Args {
     #[arg(long, default_value_t = 100)]
     chunk: u64,
 
-    /// Measured range or tree-only requests per wallet
+    /// Measured range, tree-only or tx requests per wallet
     #[arg(long, default_value_t = 20)]
     steps: u64,
 
-    /// Starting height for the first wallet (others are offset)
+    /// Starting height for the first wallet (others are offset); with --tx, where transaction IDs are collected
     #[arg(long, default_value_t = 2_000_000)]
     start_height: u64,
 
@@ -53,6 +66,10 @@ struct Args {
     /// Run only GetTreeState with one unsigned decimal height per line
     #[arg(long, value_name = "PATH")]
     tree_heights_file: Option<PathBuf>,
+
+    /// Runs GetTransaction only; skips GetBlockRange and GetTreeState
+    #[arg(long, conflicts_with = "tree_heights_file")]
+    tx: bool,
 
     /// Connection and request timeout in seconds, including the whole block stream
     #[arg(long, default_value_t = 30)]
@@ -234,6 +251,95 @@ async fn run_tree_wallet(
     samples
 }
 
+/// Downloads TX_SOURCE_BLOCKS compact blocks from `start_height` and returns
+/// every transaction listed in them, with the height of its block. Not timed.
+async fn collect_txs(
+    client: &mut CompactTxStreamerClient<Channel>,
+    start_height: u64,
+    timeout: Duration,
+) -> Result<Arc<[TxRef]>, String> {
+    let end_height = start_height + TX_SOURCE_BLOCKS - 1;
+    let mut txs = Vec::new();
+    let mut height = start_height;
+    while height <= end_height {
+        let end = (height + TX_SOURCE_BATCH - 1).min(end_height);
+        let req = BlockRange {
+            start: Some(BlockId { height, hash: vec![] }),
+            end: Some(BlockId { height: end, hash: vec![] }),
+        };
+        let drain = async {
+            let mut stream = client.get_block_range(req).await.map_err(rpc_error)?.into_inner();
+            let mut next = height;
+            while let Some(block) = stream.message().await.map_err(rpc_error)? {
+                if block.height != next {
+                    return Err("block out of order".to_string());
+                }
+                txs.extend(block.vtx.into_iter().map(|tx| TxRef { hash: tx.hash, height: next }));
+                next += 1;
+            }
+            if next != end + 1 {
+                return Err("stream ended before the range did".to_string());
+            }
+            Ok(())
+        };
+        tokio::time::timeout(timeout, drain)
+            .await
+            .unwrap_or_else(|_| Err("timeout".to_string()))
+            .map_err(|error| format!("blocks {height}-{end}: {error}"))?;
+        height = end + 1;
+    }
+    if txs.is_empty() {
+        return Err(format!("no transactions in compact blocks {start_height}-{end_height}"));
+    }
+    Ok(txs.into())
+}
+
+/// One GetTransaction. Fails on an error status, the timeout, an empty reply,
+/// or a mined height other than the block the ID came from.
+async fn fetch_tx(
+    client: &mut CompactTxStreamerClient<Channel>,
+    tx: &TxRef,
+    timeout: Duration,
+) -> Result<(), String> {
+    let req = TxFilter { block: None, index: 0, hash: tx.hash.clone() };
+    let reply = tokio::time::timeout(timeout, client.get_transaction(req))
+        .await
+        .map_err(|_| "timeout".to_string())?
+        .map_err(rpc_error)?
+        .into_inner();
+    if reply.data.is_empty() {
+        return Err("GetTransaction returned no transaction data".to_string());
+    }
+    if reply.height != tx.height {
+        return Err(format!(
+            "GetTransaction returned height {}, expected {}",
+            reply.height, tx.height
+        ));
+    }
+    Ok(())
+}
+
+async fn run_tx_wallet(
+    mut client: CompactTxStreamerClient<Channel>,
+    txs: Arc<[TxRef]>,
+    mut index: usize,
+    steps: u64,
+    timeout: Duration,
+) -> Vec<Sample> {
+    let mut samples = Vec::new();
+    for _ in 0..steps {
+        let start = Instant::now();
+        let result = fetch_tx(&mut client, &txs[index], timeout).await;
+        samples.push(Sample {
+            method: "GetTransaction",
+            latency_ms: start.elapsed().as_secs_f64() * 1000.0,
+            error: result.err(),
+        });
+        index = (index + 1) % txs.len();
+    }
+    samples
+}
+
 fn summarize(name: &str, samples: &[Sample], wall_secs: f64, status: RunStatus) -> Summary {
     let mut hist = Histogram::<u64>::new_with_bounds(1, 60_000_000, 3).unwrap();
     let mut errors = 0;
@@ -395,6 +501,7 @@ async fn probe(endpoint: &Endpoint, timeout: Duration) -> Result<(), String> {
 enum WalletWorkload {
     Ranges(u64),
     Trees { heights: Arc<[u64]>, index: usize },
+    Txs { txs: Arc<[TxRef]>, index: usize },
 }
 
 async fn run_endpoint(
@@ -403,7 +510,7 @@ async fn run_endpoint(
     args: &Args,
     tree_heights: Option<Arc<[u64]>>,
     timeout: Duration,
-) -> Summary {
+) -> Result<Summary, String> {
     let probe_error = if tree_heights.is_some() {
         None
     } else {
@@ -413,6 +520,31 @@ async fn run_endpoint(
         eprintln!("  {error}");
     }
 
+    let txs = if args.tx {
+        let collected = match connect(&endpoint, timeout).await {
+            Ok(mut client) => collect_txs(&mut client, args.start_height, timeout).await,
+            Err(error) => Err(format!("connection failed: {error}")),
+        };
+        match collected {
+            Ok(txs) => {
+                eprintln!(
+                    "  collected {} transactions from blocks {}-{}",
+                    txs.len(),
+                    args.start_height,
+                    args.start_height + TX_SOURCE_BLOCKS - 1,
+                );
+                Some(txs)
+            }
+            Err(error) => {
+                let error = format!("transaction collection failed: {error}");
+                eprintln!("  {error}");
+                return Err(error);
+            }
+        }
+    } else {
+        None
+    };
+
     let chunk = args.chunk;
     let steps = args.steps;
     let tree_every = args.tree_every;
@@ -421,6 +553,7 @@ async fn run_endpoint(
     let setup = (0..args.concurrency).map(|wallet| {
         let endpoint = endpoint.clone();
         let tree_heights = tree_heights.clone();
+        let txs = txs.clone();
         tokio::spawn(async move {
             let mut client = connect(&endpoint, timeout).await?;
             let workload = if let Some(heights) = tree_heights {
@@ -429,6 +562,18 @@ async fn run_endpoint(
                     let _ = fetch_tree_height(&mut client, heights[index], timeout).await;
                 }
                 WalletWorkload::Trees { heights, index }
+            } else if let Some(txs) = txs {
+                // Each wallet takes its own run of warmup + steps transactions,
+                // warming up on the first ones and timing the rest, as the range
+                // workload warms up on the blocks before the ones it times.
+                let len = txs.len() as u128;
+                let first = wallet as u128 * (u128::from(warmup) + u128::from(steps)) % len;
+                for step in 0..u128::from(warmup) {
+                    let at = ((first + step) % len) as usize;
+                    let _ = fetch_tx(&mut client, &txs[at], timeout).await;
+                }
+                let index = ((first + u128::from(warmup)) % len) as usize;
+                WalletWorkload::Txs { txs, index }
             } else {
                 let start = start_height + wallet as u64 * 10;
                 for step in 0..warmup {
@@ -481,6 +626,9 @@ async fn run_endpoint(
                     WalletWorkload::Trees { heights, index } => {
                         run_tree_wallet(client, heights, index, steps, timeout).await
                     }
+                    WalletWorkload::Txs { txs, index } => {
+                        run_tx_wallet(client, txs, index, steps, timeout).await
+                    }
                 }
             })
         })
@@ -500,7 +648,7 @@ async fn run_endpoint(
             }
         }
     }
-    summarize(name, &samples, wall_secs, status)
+    Ok(summarize(name, &samples, wall_secs, status))
 }
 
 #[tokio::main]
@@ -512,6 +660,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("example: --endpoint lwd=http://127.0.0.1:9067 --endpoint zainod=http://127.0.0.1:8137");
         std::process::exit(1);
     }
+    if args.tx && args.start_height.checked_add(TX_SOURCE_BLOCKS).is_none() {
+        eprintln!("error: --start-height is too large for --tx");
+        std::process::exit(1);
+    }
 
     let timeout = Duration::from_secs(args.timeout);
     let tree_heights = args
@@ -520,6 +672,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(read_tree_heights)
         .transpose()?;
     let mut all_summaries = Vec::new();
+    let mut failed = false;
 
     for (name, url) in &args.endpoint {
         eprintln!("Connecting to {} ({})...", name, url);
@@ -538,7 +691,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
 
-        let summary = run_endpoint(name, endpoint, &args, tree_heights.clone(), timeout).await;
+        let summary = match run_endpoint(name, endpoint, &args, tree_heights.clone(), timeout).await {
+            Ok(summary) => summary,
+            Err(_) => {
+                // already reported; no result is recorded for this endpoint
+                failed = true;
+                continue;
+            }
+        };
         if !args.json {
             print_summary(&summary);
             println!(
@@ -554,9 +714,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", serde_json::to_string_pretty(&all_summaries)?);
     }
     if let Some(path) = &args.json_out {
-        std::fs::write(path, serde_json::to_string_pretty(&all_summaries)?)?;
-        eprintln!("wrote {}", path);
+        if all_summaries.is_empty() {
+            eprintln!("no results to write to {}", path);
+        } else {
+            std::fs::write(path, serde_json::to_string_pretty(&all_summaries)?)?;
+            eprintln!("wrote {}", path);
+        }
     }
 
+    if failed {
+        std::process::exit(1);
+    }
     Ok(())
 }
