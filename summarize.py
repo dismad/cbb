@@ -35,7 +35,7 @@ def parse_name(stem: str):
       lwd-tx-50-pass2-warm           -> ("lwd", 50, "tx-pass2-warm")
     """
     # blockrange or tx form
-    m = re.match(r'^([a-zA-Z0-9]+)-(blockrange|tx)-(\d+)(?:-(.+))?$', stem)
+    m = re.match(r'^([a-zA-Z0-9_]+)-(blockrange|tx)-(\d+)(?:-(.+))?$', stem)
     if m:
         indexer = m.group(1)
         workload = m.group(2)
@@ -43,7 +43,7 @@ def parse_name(stem: str):
         variant = f"{workload}-{m.group(4)}" if m.group(4) else workload
         return (indexer, conc, variant)
     # original form
-    m = re.match(r'^([a-zA-Z0-9]+)-(\d+)(?:-(.+))?$', stem)
+    m = re.match(r'^([a-zA-Z0-9_]+)-(\d+)(?:-(.+))?$', stem)
     if m:
         return (m.group(1), int(m.group(2)), m.group(3) or "")
     return (stem, 0, "")

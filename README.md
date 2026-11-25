@@ -112,6 +112,8 @@ Each script:
 - Prints a human-readable summary and saves JSON from the same run to `results/`
 - Can be edited if your ports or parameters differ
 
+`bench-zainod.sh` also takes `NAME=<name>` (letters, digits and `_` only, default `zainod`) to save results under another name, e.g. `NAME=zaino_v0_11_0 ./bench-zainod.sh` writes `results/zaino_v0_11_0-50-pass1.json`.
+
 ```bash
 # make sure the binary is built
 cargo build --release
