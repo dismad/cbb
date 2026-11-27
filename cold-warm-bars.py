@@ -64,7 +64,7 @@ def parse_filename(basename):
     """Return (service, workload, concurrency) from any naming style.
     workload is "" for default runs, else "blockrange" or "tx"."""
     stem = os.path.splitext(basename)[0]
-    m = re.match(r'^([a-zA-Z0-9]+)-(?:(blockrange|tx)-)?(\d+)-', stem)
+    m = re.match(r'^([a-zA-Z0-9_]+)-(?:(blockrange|tx)-)?(\d+)-', stem)
     if m:
         return m.group(1), m.group(2) or "", int(m.group(3))
     return None, None, None
