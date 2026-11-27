@@ -7,8 +7,9 @@ Compares **lightwalletd**, **zainod**, **zingod**, **zebrad native**, **ztreamer
 
 
 > **Note on throughput (req/s):**  
-Throughput is `(total_requests - errors) / wall_time`: only successful requests count, across `GetBlockRange` and `GetTreeState`.
+Throughput is `(total_requests - errors) / wall_time`: only successful requests count, across `GetBlockRange` and `GetTreeState` (or `GetTransaction` with `--tx`).
 Wall time runs from the shared start line to the last wallet finishing, so connection setup and warm-up are excluded.
+
 A fast method can raise the number even when another method is slow.  
 For a pure block-serving comparison use `--tree-every 0` (the bench scripts' `--blockrange` option); for tree-state cost look at `GetTreeState` latencies.
 
@@ -64,10 +65,11 @@ sudo apt install python3-matplotlib
 | `--endpoint name=url` | —       | Repeatable. At least one required.                     |
 | `--concurrency`       | 50      | Number of virtual wallets                              |
 | `--chunk`             | 100     | Blocks per `GetBlockRange`                             |
-| `--steps`             | 20      | Measured range or tree-only requests per wallet                   |
-| `--start-height`      | 2000000 | Starting height (wallets are offset)                   |
+| `--steps`             | 20      | Measured range, tree-only or tx requests per wallet               |
+| `--start-height`      | 2000000 | Starting height (wallets are offset); with `--tx`, where transaction IDs are collected |
 | `--tree-every`        | 5       | Call `GetTreeState` every N range requests (0 = never) |
 | `--tree-heights-file PATH` | —   | Run only `GetTreeState` at heights from a file |
+| `--tx`                | false   | Run only `GetTransaction`, on transactions from the 1000 compact blocks at `--start-height` |
 | `--timeout`           | 30      | Timeout in seconds per connection or request          |
 | `--warmup`            | 2       | Warm-up requests per wallet (not counted)              |
 | `--json`              | false   | Emit JSON summary instead of text                      |
@@ -109,6 +111,7 @@ fails.
   from successful streams. The range method's JSON reports `first_block`,
   `max_block_gap`, `blocks`, and `blocks_per_sec` when there are eligible samples.
 - Occasional `GetTreeState`
+- `GetTransaction` latency (with `--tx`)
 - Error rate and timeouts
 - p50 / p95 / p99 / max
 - Throughput (successful requests/sec across the run and by method)
@@ -133,6 +136,7 @@ Each script accepts an optional mode flag:
 | -------------- | --------------------------------------------------- | --------------- |
 | *(none)*       | Default mixed workload (`GetBlockRange` + occasional `GetTreeState`) | *(none)*        |
 | `--blockrange` | `GetBlockRange` only (`--tree-every 0`)             | `-blockrange`   |
+| `--tx`         | `GetTransaction` only (`--tx`)                      | `-tx`           |
 
 
 Each script:
@@ -156,6 +160,9 @@ cargo build --release
 # GetBlockRange only
 ./bench-ztreamerd.sh --blockrange
 
+# GetTransaction only
+./bench-ztreamerd.sh --tx
+
 # GetTreeState maximized
 ./bench-ztreamerd.sh --tree
 ```
@@ -166,6 +173,7 @@ cargo build --release
 | -------------- | -------------------------------------------- |
 | Default        | `results/ztreamerd-50-pass2-warm.json`       |
 | `--blockrange` | `results/ztreamerd-blockrange-50-pass2-warm.json` |
+| `--tx`         | `results/ztreamerd-tx-50-pass2-warm.json`    |
 
 After they finish you can generate the summary and graphs:
 
@@ -207,7 +215,7 @@ python3 graph.py
 python3 cold-warm-bars.py
 ```
 
-Produces PNG files in `graphs/` (linear and `_log` versions).
+Produces PNG files in `graphs/` (linear and `_log` versions). Default results are graphed in `graphs/`; `--blockrange` and `--tx` results are graphed separately in `graphs/blockrange/` and `graphs/tx/`.
 
 - Line plots (`graph.py`): metric vs concurrency for each indexer.
 - Grouped bars (`cold-warm-bars.py`): pass 1 and pass 2 side by side.

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Grouped bar charts: cold vs warm at each concurrency.
 Generates both linear and log-scale versions.
-Handles both "svc-50-pass1.json" and "svc-blockrange-50-pass1.json".
+Handles "svc-50-pass1.json", "svc-blockrange-50-pass1.json" and "svc-tx-50-pass1.json".
+Each workload gets its own graphs: default runs in graphs/, blockrange runs in
+graphs/blockrange/, tx runs in graphs/tx/.
 """
 
 import json
@@ -59,17 +61,15 @@ def assign_colors(services):
     return colors
 
 def parse_filename(basename):
-    """Return (service, concurrency) from either naming style."""
+    """Return (service, workload, concurrency) from any naming style.
+    workload is "" for default runs, else "blockrange" or "tx"."""
     stem = os.path.splitext(basename)[0]
-    m = re.match(r'^([a-zA-Z0-9]+)-blockrange-(\d+)-', stem)
+    m = re.match(r'^([a-zA-Z0-9]+)-(?:(blockrange|tx)-)?(\d+)-', stem)
     if m:
-        return m.group(1), int(m.group(2))
-    m = re.match(r'^([a-zA-Z0-9]+)-(\d+)-', stem)
-    if m:
-        return m.group(1), int(m.group(2))
-    return None, None
+        return m.group(1), m.group(2) or "", int(m.group(3))
+    return None, None, None
 
-def load_pass(service, label):
+def load_pass(service, workload, label):
     pattern = os.path.join(RESULTS_DIR, f"{service}-*-{label}.json")
     out = {}
     for path in glob.glob(pattern):
@@ -81,21 +81,22 @@ def load_pass(service, label):
             data = json.loads(raw[start:])
             if not data:
                 continue
-            svc, conc = parse_filename(os.path.basename(path))
-            if svc != service or conc is None:
+            svc, wl, conc = parse_filename(os.path.basename(path))
+            if svc != service or wl != workload or conc is None:
                 continue
             out[conc] = data[0]
         except Exception:
             continue
     return out
 
-def detect_services():
-    found = set()
+def detect_runs():
+    """Return {workload: sorted services} for every pass1/pass2 result."""
+    found = {}
     for path in glob.glob(os.path.join(RESULTS_DIR, "*-pass*.json")):
-        svc, _ = parse_filename(os.path.basename(path))
+        svc, workload, _ = parse_filename(os.path.basename(path))
         if svc:
-            found.add(svc)
-    return sorted(found) or ["lwd", "zainod"]
+            found.setdefault(workload, set()).add(svc)
+    return {workload: sorted(svcs) for workload, svcs in found.items()}
 
 def get_val(summary, key, method=None):
     if method:
@@ -105,17 +106,26 @@ def get_val(summary, key, method=None):
         return np.nan
     return summary.get(key, 0)
 
-def plot_bars(services, colors, title, ylabel, key, method=None, filename="bars.png", logy=False):
+def plot_bars(services, workload, out_dir, colors, title, ylabel, key, method=None,
+              filename="bars.png", logy=False):
     all_conc = set()
     data = {}
     for svc in services:
-        cold = load_pass(svc, "pass1")
-        warm = load_pass(svc, "pass2-warm")
+        cold = load_pass(svc, workload, "pass1")
+        warm = load_pass(svc, workload, "pass2-warm")
         data[svc] = (cold, warm)
         all_conc.update(cold.keys())
         all_conc.update(warm.keys())
     concs = sorted(all_conc)
     if not concs:
+        print(f"no data: {filename}")
+        return
+    # a per-method chart with no indexer running that method would be empty
+    if method and all(
+        np.isnan(get_val(summary, key, method))
+        for cold, warm in data.values()
+        for summary in (*cold.values(), *warm.values())
+    ):
         print(f"no data: {filename}")
         return
 
@@ -154,15 +164,18 @@ def plot_bars(services, colors, title, ylabel, key, method=None, filename="bars.
         ncol=1,
     )
     plt.grid(True, axis="y", alpha=0.3, which="both" if logy else "major")
-    out = os.path.join(OUT_DIR, filename)
+    out = os.path.join(out_dir, filename)
     plt.savefig(out, dpi=130, bbox_inches="tight")
     print(f"saved {out}")
     plt.close()
 
 def main():
-    services = detect_services()
-    colors = assign_colors(services)
-    print(f"services: {services}")
+    runs = detect_runs()
+    if not runs:
+        print(f"no pass1/pass2 results in {RESULTS_DIR}/")
+        return
+    # one color per service across all workloads
+    colors = assign_colors(sorted(set().union(*runs.values())))
     print(f"colors: {colors}")
 
     specs = [
@@ -173,15 +186,22 @@ def main():
         ("GetBlockRange p95", "p95 (ms)", "p95", "GetBlockRange", "bar_blockrange_p95"),
         ("GetBlockRange errors", "errors", "errors", "GetBlockRange", "bar_blockrange_errors"),
         ("GetTreeState p95", "p95 (ms)", "p95", "GetTreeState", "bar_treestate_p95"),
+        ("GetTransaction p95", "p95 (ms)", "p95", "GetTransaction", "bar_transaction_p95"),
+        ("GetTransaction errors", "errors", "errors", "GetTransaction", "bar_transaction_errors"),
         ("Throughput", "requests/sec", "throughput_rps", None, "bar_throughput"),
         ("Wall time", "seconds", "wall_time_secs", None, "bar_wall_time"),
     ]
 
-    for title, ylabel, key, method, base in specs:
-        plot_bars(services, colors, title, ylabel, key, method, filename=f"{base}.png", logy=False)
-        plot_bars(services, colors, title, ylabel, key, method, filename=f"{base}_log.png", logy=True)
-
-    print(f"\nBar graphs written to {OUT_DIR}/ (linear + _log versions)")
+    for workload, services in sorted(runs.items()):
+        out_dir = os.path.join(OUT_DIR, workload) if workload else OUT_DIR
+        os.makedirs(out_dir, exist_ok=True)
+        print(f"\nworkload: {workload or 'default'}   services: {services}")
+        for title, ylabel, key, method, base in specs:
+            plot_bars(services, workload, out_dir, colors, title, ylabel, key, method,
+                      filename=f"{base}.png", logy=False)
+            plot_bars(services, workload, out_dir, colors, title, ylabel, key, method,
+                      filename=f"{base}_log.png", logy=True)
+        print(f"Bar graphs written to {out_dir}/ (linear + _log versions)")
 
 if __name__ == "__main__":
     main()

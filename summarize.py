@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Pretty-print all cbb JSON results as a table + deltas (colorized).
-Handles both "svc-50-pass2-warm.json" and "svc-blockrange-50-pass2-warm.json".
+Handles "svc-50-pass2-warm.json", "svc-blockrange-50-pass2-warm.json" and "svc-tx-50-pass2-warm.json".
 """
 
 import json, sys, glob, re
@@ -28,17 +28,19 @@ def load(path):
     return json.loads(raw[start:])
 
 def parse_name(stem: str):
-    """Return (indexer, concurrency, variant) from either naming style.
+    """Return (indexer, concurrency, variant) from any naming style.
     Examples:
       lwd-50-pass2-warm              -> ("lwd", 50, "pass2-warm")
       lwd-blockrange-50-pass2-warm   -> ("lwd", 50, "blockrange-pass2-warm")
+      lwd-tx-50-pass2-warm           -> ("lwd", 50, "tx-pass2-warm")
     """
-    # blockrange form
-    m = re.match(r'^([a-zA-Z0-9]+)-blockrange-(\d+)(?:-(.+))?$', stem)
+    # blockrange or tx form
+    m = re.match(r'^([a-zA-Z0-9]+)-(blockrange|tx)-(\d+)(?:-(.+))?$', stem)
     if m:
         indexer = m.group(1)
-        conc = int(m.group(2))
-        variant = f"blockrange-{m.group(3)}" if m.group(3) else "blockrange"
+        workload = m.group(2)
+        conc = int(m.group(3))
+        variant = f"{workload}-{m.group(4)}" if m.group(4) else workload
         return (indexer, conc, variant)
     # original form
     m = re.match(r'^([a-zA-Z0-9]+)-(\d+)(?:-(.+))?$', stem)

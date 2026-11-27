@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Graph cbb JSON results (pass2-warm preferred). Auto-detects services.
 Generates both linear and log-scale versions of each plot.
-Handles both "svc-50-pass2-warm.json" and "svc-blockrange-50-pass2-warm.json".
+Handles "svc-50-pass2-warm.json", "svc-blockrange-50-pass2-warm.json" and "svc-tx-50-pass2-warm.json".
+Each workload gets its own graphs: default runs in graphs/, blockrange runs in
+graphs/blockrange/, tx runs in graphs/tx/.
 """
 
 import json
@@ -58,32 +60,31 @@ def assign_colors(services):
     return colors
 
 def parse_filename(basename):
-    """Return (service, concurrency) from either naming style.
+    """Return (service, workload, concurrency) from any naming style.
+    workload is "" for default runs.
     Examples:
-      lwd-50-pass2-warm.json              -> ("lwd", 50)
-      lwd-blockrange-50-pass2-warm.json   -> ("lwd", 50)
+      lwd-50-pass2-warm.json              -> ("lwd", "", 50)
+      lwd-blockrange-50-pass2-warm.json   -> ("lwd", "blockrange", 50)
+      lwd-tx-50-pass2-warm.json           -> ("lwd", "tx", 50)
     """
     stem = os.path.splitext(basename)[0]
-    # Try the blockrange form first
-    m = re.match(r'^([a-zA-Z0-9]+)-blockrange-(\d+)-', stem)
+    m = re.match(r'^([a-zA-Z0-9]+)-(?:(blockrange|tx)-)?(\d+)-', stem)
     if m:
-        return m.group(1), int(m.group(2))
-    # Fall back to original form
-    m = re.match(r'^([a-zA-Z0-9]+)-(\d+)-', stem)
-    if m:
-        return m.group(1), int(m.group(2))
-    return None, None
+        return m.group(1), m.group(2) or "", int(m.group(3))
+    return None, None, None
 
-def detect_services():
-    found = set()
+def detect_runs():
+    """Return {workload: sorted services} for every pass2-warm result."""
+    found = {}
     for path in glob.glob(os.path.join(RESULTS_DIR, "*-pass2-warm.json")):
-        svc, _ = parse_filename(os.path.basename(path))
+        svc, workload, _ = parse_filename(os.path.basename(path))
         if svc:
-            found.add(svc)
-    return sorted(found) or ["lwd", "zainod"]
+            found.setdefault(workload, set()).add(svc)
+    return {workload: sorted(svcs) for workload, svcs in found.items()}
 
-def load_warm(service):
-    """Load pass2-warm JSON files for a service. Returns list of (concurrency, summary)."""
+def load_warm(service, workload):
+    """Load pass2-warm JSON files for one service and workload.
+    Returns list of (concurrency, summary)."""
     pattern = os.path.join(RESULTS_DIR, f"{service}-*-pass2-warm.json")
     rows = []
     for path in sorted(glob.glob(pattern)):
@@ -97,8 +98,8 @@ def load_warm(service):
             data = json.loads(raw[start:])
             if not data:
                 continue
-            svc, conc = parse_filename(os.path.basename(path))
-            if svc != service or conc is None:
+            svc, wl, conc = parse_filename(os.path.basename(path))
+            if svc != service or wl != workload or conc is None:
                 continue
             rows.append((conc, data[0]))
         except (json.JSONDecodeError, ValueError, IndexError) as e:
@@ -120,11 +121,12 @@ def series(rows, key, method=None):
         ys.append(val)
     return xs, ys
 
-def plot(services, colors, title, ylabel, key, method=None, filename="plot.png", logy=False):
+def plot(services, workload, out_dir, colors, title, ylabel, key, method=None,
+         filename="plot.png", logy=False):
     plt.figure(figsize=(10, 5), constrained_layout=True)
     any_data = False
     for svc in services:
-        rows = load_warm(svc)
+        rows = load_warm(svc, workload)
         if not rows:
             print(f"no data for {svc}")
             continue
@@ -153,15 +155,18 @@ def plot(services, colors, title, ylabel, key, method=None, filename="plot.png",
         borderaxespad=0.0,
     )
     plt.grid(True, alpha=0.3, which="both" if logy else "major")
-    out = os.path.join(OUT_DIR, filename)
+    out = os.path.join(out_dir, filename)
     plt.savefig(out, dpi=120, bbox_inches="tight")
     print(f"saved {out}")
     plt.close()
 
 def main():
-    services = detect_services()
-    colors = assign_colors(services)
-    print(f"services: {services}")
+    runs = detect_runs()
+    if not runs:
+        print(f"no pass2-warm results in {RESULTS_DIR}/")
+        return
+    # one color per service across all workloads
+    colors = assign_colors(sorted(set().union(*runs.values())))
     print(f"colors: {colors}")
 
     specs = [
@@ -171,15 +176,22 @@ def main():
         ("p99 latency vs concurrency", "p99 (ms)", "p99", None, "p99"),
         ("GetBlockRange p95 vs concurrency", "p95 (ms)", "p95", "GetBlockRange", "blockrange_p95"),
         ("GetBlockRange errors vs concurrency", "errors", "errors", "GetBlockRange", "blockrange_errors"),
+        ("GetTransaction p95 vs concurrency", "p95 (ms)", "p95", "GetTransaction", "transaction_p95"),
+        ("GetTransaction errors vs concurrency", "errors", "errors", "GetTransaction", "transaction_errors"),
         ("Throughput vs concurrency", "requests/sec", "throughput_rps", None, "throughput"),
         ("Wall time vs concurrency", "seconds", "wall_time_secs", None, "wall_time"),
     ]
 
-    for title, ylabel, key, method, base in specs:
-        plot(services, colors, title, ylabel, key, method, filename=f"{base}.png", logy=False)
-        plot(services, colors, title, ylabel, key, method, filename=f"{base}_log.png", logy=True)
-
-    print(f"\nGraphs written to {OUT_DIR}/ (linear + _log versions)")
+    for workload, services in sorted(runs.items()):
+        out_dir = os.path.join(OUT_DIR, workload) if workload else OUT_DIR
+        os.makedirs(out_dir, exist_ok=True)
+        print(f"\nworkload: {workload or 'default'}   services: {services}")
+        for title, ylabel, key, method, base in specs:
+            plot(services, workload, out_dir, colors, title, ylabel, key, method,
+                 filename=f"{base}.png", logy=False)
+            plot(services, workload, out_dir, colors, title, ylabel, key, method,
+                 filename=f"{base}_log.png", logy=True)
+        print(f"Graphs written to {out_dir}/ (linear + _log versions)")
 
 if __name__ == "__main__":
     main()

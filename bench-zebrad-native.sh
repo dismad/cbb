@@ -1,6 +1,8 @@
 #!/bin/bash
-# Usage: ./bench-zebrad-native.sh [--blockrange]
-#   --blockrange   only measure GetBlockRange (skip GetTreeState)
+# Usage: ./bench-zebrad-native.sh [--blockrange | --tx]
+#   (no flag)      runs GetBlockRange and GetTreeState
+#   --blockrange   runs GetBlockRange only; skips GetTreeState
+#   --tx           runs GetTransaction only; skips GetBlockRange and GetTreeState
 
 ENDPOINT="zebrad=http://127.0.0.1:9069"
 START=2000000
@@ -18,6 +20,10 @@ if [ "${1:-}" = "--blockrange" ]; then
   TAG="-blockrange"
   EXTRA_ARGS=(--tree-every 0)
   echo "Mode: GetBlockRange only"
+elif [ "${1:-}" = "--tx" ]; then
+  TAG="-tx"
+  EXTRA_ARGS=(--tx)
+  echo "Mode: GetTransaction only"
 fi
 
 for CONC in 50 100 150 200; do
