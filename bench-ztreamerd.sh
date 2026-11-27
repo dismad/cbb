@@ -10,6 +10,7 @@ STEPS=50
 CHUNK=100
 OUTDIR="results"
 mkdir -p "$OUTDIR"
+FAILED=0
 
 BLOCKRANGE=0
 TAG=""
@@ -38,9 +39,10 @@ for CONC in 50 100 150 200; do
       --chunk $CHUNK \
       --start-height $START \
       "${EXTRA_ARGS[@]}" \
-      --json-out "$OUTDIR/ztreamerd${TAG}-${CONC}-${LABEL}.json"
+      --json-out "$OUTDIR/ztreamerd${TAG}-${CONC}-${LABEL}.json" || FAILED=1
     echo
   done
 done
 echo "JSON results saved in $OUTDIR/"
-ls -la "$OUTDIR"/ztreamerd${TAG}-*.json
+ls -la "$OUTDIR"/ztreamerd${TAG}-*.json || FAILED=1
+exit "$FAILED"
